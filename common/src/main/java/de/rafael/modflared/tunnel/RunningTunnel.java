@@ -18,6 +18,7 @@ import org.lwjgl.system.Platform;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
+import java.util.zip.CRC32;
 
 public record RunningTunnel(Access access, Process process) {
 
@@ -59,11 +60,23 @@ public record RunningTunnel(Access access, Process process) {
     public record Access(String protocol, String hostname, InetSocketAddress tunnelAddress) {
         @Contract("_ -> new")
         public static @NotNull Access localWithRandomPort(String host) {
-            return new Access("tcp", host, new InetSocketAddress("127.0.0.1", (int) (Math.random() * 10000 + 25565)));
+            return new Access("tcp", host, new InetSocketAddress("127.0.0.1", computePort(host)));
         }
 
         public String @NotNull [] command(@NotNull String fileName, boolean prefix) {
             return new String[] {(prefix && Platform.get() != Platform.WINDOWS ? "./" : "") + fileName, "access", protocol, "--hostname", hostname, "--url", tunnelAddress.getHostString() + ":" + tunnelAddress.getPort()};
+        }
+
+        public static int computePort(@NotNull String host) {
+            final int MIN_PORT = 25565;
+            final int MAX_PORT = 65530;
+            final int RANGE = MAX_PORT - MIN_PORT + 1;
+
+            CRC32 crc32 = new CRC32();
+            crc32.update(host.getBytes());
+            long hash = crc32.getValue();
+
+            return (int) ((hash % RANGE) + MIN_PORT);
         }
     }
 

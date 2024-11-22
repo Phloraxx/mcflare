@@ -7,6 +7,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget;
 import net.minecraft.client.network.ServerInfo;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
@@ -28,7 +29,7 @@ public abstract class ServerEntryMixin {
     @Shadow @Final private MultiplayerScreen screen;
 
     @Unique
-    private static final Identifier MODFLARED_INDICATOR_TEXTURE = Identifier.of(Modflared.MOD_ID, "textures/gui/indicator.png");
+    private static final Identifier MODFLARED_INDICATOR_TEXTURE = Identifier.of(Modflared.MOD_ID, "icon/indicator");
 
     @Inject(method = "render", at = @At("TAIL"))
     public void render(@NotNull DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta, CallbackInfo ci) {
@@ -36,7 +37,7 @@ public abstract class ServerEntryMixin {
         if(tunnelStatus != null && tunnelStatus.state() == TunnelStatus.State.USE) {
             int xOffset = entryWidth - 15;
             int yOffset = 10 + 1;
-            context.drawTexture(MODFLARED_INDICATOR_TEXTURE, x + xOffset, y + yOffset, 0, 0, 10, 10, 10, 10);
+            context.drawGuiTexture(RenderLayer::getGuiTextured, MODFLARED_INDICATOR_TEXTURE, x + xOffset, y + yOffset, 10, 10);
 
             // Tooltip
             int l = mouseX - x;
