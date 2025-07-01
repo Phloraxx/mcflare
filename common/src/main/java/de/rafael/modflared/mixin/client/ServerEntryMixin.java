@@ -3,6 +3,7 @@ package de.rafael.modflared.mixin.client;
 import de.rafael.modflared.Modflared;
 import de.rafael.modflared.interfaces.mixin.IServerInfo;
 import de.rafael.modflared.tunnel.TunnelStatus;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget;
@@ -26,7 +27,6 @@ import java.util.Collections;
 public abstract class ServerEntryMixin {
 
     @Shadow @Final private ServerInfo server;
-    @Shadow @Final private MultiplayerScreen screen;
 
     @Unique
     private static final Identifier MODFLARED_INDICATOR_TEXTURE = Identifier.of(Modflared.MOD_ID, "icon/indicator");
@@ -37,13 +37,13 @@ public abstract class ServerEntryMixin {
         if(tunnelStatus != null && tunnelStatus.state() == TunnelStatus.State.USE) {
             int xOffset = entryWidth - 15;
             int yOffset = 10 + 1;
-            context.drawGuiTexture(RenderLayer::getGuiTextured, MODFLARED_INDICATOR_TEXTURE, x + xOffset, y + yOffset, 10, 10);
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, MODFLARED_INDICATOR_TEXTURE, x + xOffset, y + yOffset, 10, 10);
 
             // Tooltip
             int l = mouseX - x;
             int m = mouseY - y;
             if (l >= entryWidth - 15 && l <= entryWidth - 5 && m >= 9 && m <= 9 + 10) {
-                this.screen.setTooltip(Collections.singletonList(Text.translatable("gui.multiplayer.tunnel.status.0").formatted(Formatting.AQUA).asOrderedText()));
+                context.drawTooltip(Text.translatable("gui.multiplayer.tunnel.status.0").formatted(Formatting.AQUA), mouseX, mouseY);
             }
         }
     }
