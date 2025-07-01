@@ -124,6 +124,8 @@ public class DownloadedCloudflared extends Cloudflared {
 
                     // Check if file is corrupt
                     if(fileHash.compareTo(file)) {
+                        Modflared.LOGGER.info("Preparing cloudflared binary...");
+                        prepareFile(file);
                         Modflared.LOGGER.info("Download finished of cloudflared version {}!", version);
                         return;
                     } else {
@@ -139,6 +141,20 @@ public class DownloadedCloudflared extends Cloudflared {
         }, Modflared.EXECUTOR);
     }
 
+    private void prepareFile(File file) throws IOException, InterruptedException {
+        switch (Platform.get()) {
+            case MACOSX:
+                new ProcessBuilder("tar", "-xzf", file.getName()).directory(file.getParentFile()).start().waitFor();
+                new ProcessBuilder("mv", "cloudflared", file.getName()).directory(file.getParentFile()).start().waitFor();
+                //Fallthrough
+            case LINUX:
+                new ProcessBuilder("chmod", "+x", file.getName()).directory(file.getParentFile()).start();
+                break;
+            default:
+                break;
+        }
+    }
+
     private @NotNull File syncDownloadFile() throws IOException, InterruptedException {
         File output = new File(TunnelManager.DATA_FOLDER, download.fileName());
         if(!output.getParentFile().exists()) output.getParentFile().mkdirs();
@@ -152,17 +168,6 @@ public class DownloadedCloudflared extends Cloudflared {
             fileOutputStream.flush();
         }
 
-        switch (Platform.get()) {
-            case MACOSX:
-                new ProcessBuilder("tar", "-xzf", output.getName()).directory(output.getParentFile()).start().waitFor();
-                new ProcessBuilder("mv", "cloudflared", output.getName()).directory(output.getParentFile()).start().waitFor();
-                //Fallthrough
-            case LINUX:
-                new ProcessBuilder("chmod", "+x", output.getName()).directory(output.getParentFile()).start();
-                break;
-            default:
-                break;
-        }
         return output;
     }
 
