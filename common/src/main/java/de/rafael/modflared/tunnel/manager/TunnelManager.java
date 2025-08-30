@@ -45,6 +45,10 @@ public class TunnelManager {
 
     private final List<RunningTunnel> runningTunnels = new ArrayList<>();
 
+    public void initDirectories() {
+        DATA_FOLDER.mkdirs();
+    }
+
     public RunningTunnel createTunnel(String host) {
         var binary = this.cloudflared.get();
         if (binary != null) {

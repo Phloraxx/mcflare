@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import de.rafael.modflared.Modflared;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.File;
 import java.io.IOException;
@@ -60,7 +61,7 @@ public class GithubAPI {
         }, Modflared.EXECUTOR);
     }
 
-    private static List<FileHash> extractHashes(@NotNull JsonObject data) {
+    private static @NotNull @Unmodifiable List<FileHash> extractHashes(@NotNull JsonObject data) {
         return Arrays.stream(data.get("body").getAsString().split("\n")).filter(item -> item.startsWith("cloudflared-") && item.contains(":")).map(item -> {
             var fileData = item.split(":");
             return new FileHash(fileData[0].trim(), fileData[1].trim());
