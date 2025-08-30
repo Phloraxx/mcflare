@@ -16,15 +16,19 @@ import de.rafael.modflared.tunnel.manager.TunnelManager;
 import net.minecraft.util.Pair;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.Platform;
 
 import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 public class DownloadedCloudflared extends Cloudflared {
 
@@ -91,7 +95,7 @@ public class DownloadedCloudflared extends Cloudflared {
         return command;
     }
 
-    private CompletableFuture<Void> downloadAndSaveInfo() {
+    private @NotNull CompletableFuture<Void> downloadAndSaveInfo() {
         return downloadFile().thenAccept(unused -> {
             try {
                 save();
@@ -116,19 +120,25 @@ public class DownloadedCloudflared extends Cloudflared {
     }
 
     public @NotNull CompletableFuture<Void> downloadFile() {
-        return GithubAPI.requestFileHash(download.downloadFile()).thenAcceptAsync(fileHash -> {
+        return GithubAPI.requestFileHash(download.downloadFile()).thenAcceptAsync(expected -> {
             try {
-                for (int i = 0; i < 5; i++) {
+                for (int i = 0; i < 4; i++) {
                     Modflared.LOGGER.info("Downloading cloudflared version {} from github. Attempt: {}", version, i + 1);
-                    File file = syncDownloadFile();
+                    var downloadedFile = syncDownloadFile();
+                    Modflared.LOGGER.info("Downloaded file preparing cloudflared binary...");
+                    var file = new File(TunnelManager.DATA_FOLDER, download.fileName());
+                    prepareFile(downloadedFile, file);
 
                     // Check if file is corrupt
-                    if(fileHash.compareTo(file)) {
-                        Modflared.LOGGER.info("Preparing cloudflared binary...");
-                        prepareFile(file);
+                    Modflared.LOGGER.info("Checking file integrity");
+                    var provided = GithubAPI.FileHash.computeHash(file);
+                    if(expected.compareTo(provided)) {
                         Modflared.LOGGER.info("Download finished of cloudflared version {}!", version);
                         return;
                     } else {
+                        Modflared.LOGGER.warn("This downloaded file does not match with the file hash provided on GitHub.");
+                        Modflared.LOGGER.warn("Expected {}, Provided: {}", expected.hash(), provided.hash());
+
                         file.delete();
                     }
                 }
@@ -141,22 +151,8 @@ public class DownloadedCloudflared extends Cloudflared {
         }, Modflared.EXECUTOR);
     }
 
-    private void prepareFile(File file) throws IOException, InterruptedException {
-        switch (Platform.get()) {
-            case MACOSX:
-                new ProcessBuilder("tar", "-xzf", file.getName()).directory(file.getParentFile()).start().waitFor();
-                new ProcessBuilder("mv", "cloudflared", file.getName()).directory(file.getParentFile()).start().waitFor();
-                //Fallthrough
-            case LINUX:
-                new ProcessBuilder("chmod", "+x", file.getName()).directory(file.getParentFile()).start();
-                break;
-            default:
-                break;
-        }
-    }
-
     private @NotNull File syncDownloadFile() throws IOException, InterruptedException {
-        File output = new File(TunnelManager.DATA_FOLDER, download.fileName());
+        File output = new File(TunnelManager.DATA_FOLDER, UUID.randomUUID().toString());
         if(!output.getParentFile().exists()) output.getParentFile().mkdirs();
         if(!output.exists()) output.createNewFile();
         try (BufferedInputStream in = new BufferedInputStream(URI.create(GITHUB_DOWNLOAD_ENDPOINT + version + "/" + download.downloadFile()).toURL().openStream()); BufferedOutputStream fileOutputStream = new BufferedOutputStream(new FileOutputStream(output))) {
@@ -169,6 +165,56 @@ public class DownloadedCloudflared extends Cloudflared {
         }
 
         return output;
+    }
+
+    private void prepareFile(@NotNull File downloadedFile, File targetFile) throws IOException, InterruptedException {
+        var platform = Platform.get();
+
+        if(platform == Platform.MACOSX) {
+            var workingDirectory = downloadedFile.getParentFile().toPath();
+            runCommand(workingDirectory, "tar", "-xzf", downloadedFile.getName());
+            Files.move(workingDirectory.resolve("cloudflared"), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } else {
+            Files.move(downloadedFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        if(platform == Platform.LINUX || platform == Platform.MACOSX) {
+            makeExecutable(targetFile.toPath());
+        }
+
+        downloadedFile.delete();
+    }
+
+    private void runCommand(@NotNull Path workingDirectory, String... command) throws IOException, InterruptedException {
+        ProcessBuilder processBuilder = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true);
+        Process process = processBuilder.start();
+        boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new IOException("Command timed out: " + String.join(" ", command));
+        }
+        int code = process.exitValue();
+        if (code != 0) {
+            throw new IOException("Command failed (exit " + code + "): " + String.join(" ", command));
+        }
+    }
+
+    private void makeExecutable(@NotNull Path path) throws IOException {
+        try {
+            var permissions = Files.getPosixFilePermissions(path);
+            permissions.add(PosixFilePermission.OWNER_EXECUTE);
+            permissions.add(PosixFilePermission.GROUP_EXECUTE);
+            permissions.add(PosixFilePermission.OTHERS_EXECUTE);
+            Files.setPosixFilePermissions(path, permissions);
+        } catch (UnsupportedOperationException exception) {
+            // Fallback (non-POSIX)
+            var file = path.toFile();
+            if(!file.setExecutable(true, false)) {
+                throw new IOException("Failed to set executable bit on " + file.getName());
+            }
+        }
     }
 
     private void save() throws IOException {
