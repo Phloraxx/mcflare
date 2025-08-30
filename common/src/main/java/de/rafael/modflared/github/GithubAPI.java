@@ -76,13 +76,17 @@ public class GithubAPI {
     public record FileHash(String file, String hash) {
 
         public boolean compareTo(File file) throws IOException {
-            ByteSource byteSource = Files.asByteSource(file);
-            HashCode hashCode = byteSource.hash(Hashing.sha256());
-            return compareTo(hashCode.toString());
+            return compareTo(computeHash(file));
         }
 
-        public boolean compareTo(String hash) {
-            return Objects.equals(this.hash, hash);
+        public boolean compareTo(@NotNull FileHash hash) {
+            return Objects.equals(this.hash, hash.hash());
+        }
+
+        public static @NotNull FileHash computeHash(File file) throws IOException {
+            ByteSource byteSource = Files.asByteSource(file);
+            HashCode hashCode = byteSource.hash(Hashing.sha256());
+            return new FileHash(file.getName(), hashCode.toString());
         }
 
     }
