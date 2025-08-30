@@ -22,6 +22,7 @@ public class Modflared {
     public static final TunnelManager TUNNEL_MANAGER = new TunnelManager();
 
     public static void init() {
+        TUNNEL_MANAGER.initDirectories();
         TUNNEL_MANAGER.prepareBinary();
         TUNNEL_MANAGER.loadForcedTunnels();
 
