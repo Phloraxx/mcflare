@@ -1,13 +1,5 @@
 package de.rafael.modflared.binary.download;
 
-//------------------------------
-//
-// This class was developed by Rafael K.
-// On 10/31/2022 at 11:17 PM
-// In the project cloudflared
-//
-//------------------------------
-
 import de.rafael.modflared.Modflared;
 import de.rafael.modflared.binary.Cloudflared;
 import de.rafael.modflared.github.GithubAPI;
