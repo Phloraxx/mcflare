@@ -6,14 +6,14 @@ import com.google.gson.JsonParser;
 import de.rafael.modflared.Modflared;
 import de.rafael.modflared.ModflaredPlatform;
 import de.rafael.modflared.binary.Cloudflared;
-import de.rafael.modflared.interfaces.mixin.IClientConnection;
+import de.rafael.modflared.interfaces.mixin.IConnection;
 import de.rafael.modflared.tunnel.RunningTunnel;
 import de.rafael.modflared.tunnel.TunnelStatus;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ServerAddress;
-import net.minecraft.client.toast.SystemToast;
-import net.minecraft.network.ClientConnection;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -94,7 +94,7 @@ public class TunnelManager {
      * @throws IOException If an error occurs while resolving the DNS TXT records
      */
     public @Nullable String shouldUseTunnel(String host) throws IOException {
-        if (forcedTunnels.stream().anyMatch(serverAddress -> serverAddress.getAddress().equalsIgnoreCase(host))) {
+        if (forcedTunnels.stream().anyMatch(serverAddress -> serverAddress.getHost().equalsIgnoreCase(host))) {
             return host;
         }
 
@@ -155,8 +155,8 @@ public class TunnelManager {
         }
     }
 
-    public void prepareConnection(@NotNull TunnelStatus status, ClientConnection connection) {
-        var tunnelConnection = (IClientConnection) connection;
+    public void prepareConnection(@NotNull TunnelStatus status, Connection connection) {
+        var tunnelConnection = (IConnection) connection;
         if (status.runningTunnel() != null) {
             tunnelConnection.setRunningTunnel(status.runningTunnel());
         }
@@ -214,11 +214,11 @@ public class TunnelManager {
             for (JsonElement jsonElement : entriesArray) {
                 var serverString = jsonElement.getAsString();
 
-                if (!ServerAddress.isValid(serverString)) {
+                if (!ServerAddress.isValidAddress(serverString)) {
                     Modflared.LOGGER.error("Invalid server address: {}", serverString);
                     continue;
                 }
-                forcedTunnels.add(ServerAddress.parse(serverString));
+                forcedTunnels.add(ServerAddress.parseString(serverString));
             }
         } catch (Exception exception) {
             Modflared.LOGGER.error("Failed to load forced tunnels", exception);
@@ -226,12 +226,12 @@ public class TunnelManager {
 
         Modflared.LOGGER.info("Loaded {} forced tunnels", forcedTunnels.size());
         for (ServerAddress serverAddress : forcedTunnels) {
-            Modflared.LOGGER.info(" - {}", serverAddress.getAddress());
+            Modflared.LOGGER.info(" - {}", serverAddress.getHost());
         }
     }
 
     public static void displayErrorToast() {
-        MinecraftClient.getInstance().getToastManager().add(new SystemToast(SystemToast.Type.PERIODIC_NOTIFICATION, Text.translatable("gui.toast.title.error"), Text.translatable("gui.toast.body.error")));
+        Minecraft.getInstance().getToastManager().addToast(new SystemToast(SystemToast.SystemToastId.PERIODIC_NOTIFICATION, Component.translatable("gui.toast.title.error"), Component.translatable("gui.toast.body.error")));
     }
 
 }

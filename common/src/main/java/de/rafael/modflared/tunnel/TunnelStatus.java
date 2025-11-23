@@ -1,23 +1,23 @@
 package de.rafael.modflared.tunnel;
 
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.List;
 
 public record TunnelStatus(RunningTunnel runningTunnel, State state) {
 
-    public @Unmodifiable List<Text> generateFeedback() {
+    public @Unmodifiable List<Component> generateFeedback() {
         return switch (state) {
             case USE -> List.of(
-                    Text.translatable("gui.tunnel.status.use").formatted(Formatting.AQUA)
+                    Component.translatable("gui.tunnel.status.use").withStyle(ChatFormatting.AQUA)
             );
             case DONT_USE -> List.of();
             case FAILED_TO_DETERMINE -> List.of(
-                    Text.translatable("gui.tunnel.status.failed.0").formatted(Formatting.RED),
-                    Text.translatable("gui.tunnel.status.failed.1").formatted(Formatting.RED),
-                    Text.translatable("gui.tunnel.status.failed.2").formatted(Formatting.RED)
+                    Component.translatable("gui.tunnel.status.failed.0").withStyle(ChatFormatting.RED),
+                    Component.translatable("gui.tunnel.status.failed.1").withStyle(ChatFormatting.RED),
+                    Component.translatable("gui.tunnel.status.failed.2").withStyle(ChatFormatting.RED)
             );
         };
     }

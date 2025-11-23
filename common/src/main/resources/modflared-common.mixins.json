@@ -4,12 +4,12 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
-    "client.MultiplayerServerListPingerMixin",
-    "client.ServerEntryMixin",
-    "client.ServerInfoMixin"
+    "client.ServerStatusPingerMixin",
+    "client.OnlineServerEntryMixin",
+    "client.ServerDataMixin"
   ],
   "mixins": [
-    "ClientConnectionMixin",
+    "ConnectionMixin",
     "ConnectScreenMixin"
   ],
   "injectors": {

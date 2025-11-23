@@ -1,18 +1,18 @@
 package de.rafael.modflared.mixin;
 
 import de.rafael.modflared.Modflared;
-import de.rafael.modflared.interfaces.mixin.IClientConnection;
+import de.rafael.modflared.interfaces.mixin.IConnection;
 import de.rafael.modflared.tunnel.RunningTunnel;
-import net.minecraft.network.ClientConnection;
-import net.minecraft.text.Text;
+import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Implements(@Interface(iface = IClientConnection.class, prefix = "connection$"))
-@Mixin(ClientConnection.class)
-public abstract class ClientConnectionMixin implements IClientConnection {
+@Implements(@Interface(iface = IConnection.class, prefix = "connection$"))
+@Mixin(Connection.class)
+public abstract class ConnectionMixin implements IConnection {
 
     @Unique
     private RunningTunnel modflared$runningTunnel = null;
@@ -23,8 +23,8 @@ public abstract class ClientConnectionMixin implements IClientConnection {
         return ClientConnection.connect(Modflared.TUNNEL_MANAGER.handleConnect(address, connection).address(), useEpoll, connection);
     }*/
 
-    @Inject(method = "disconnect", at = @At("TAIL"))
-    public void disconnect(Text disconnectReason, CallbackInfo callbackInfo) {
+    @Inject(method = "disconnect*", at = @At("TAIL"))
+    public void disconnect(Component disconnectReason, CallbackInfo callbackInfo) {
         synchronized(this) {
             if(this.modflared$runningTunnel != null) {
                 Modflared.TUNNEL_MANAGER.closeTunnel(this.modflared$runningTunnel);

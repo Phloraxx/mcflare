@@ -1,11 +1,11 @@
 package de.rafael.modflared.binary.download;
 
+import com.mojang.datafixers.util.Pair;
 import de.rafael.modflared.Modflared;
 import de.rafael.modflared.binary.Cloudflared;
 import de.rafael.modflared.github.GithubAPI;
 import de.rafael.modflared.tunnel.RunningTunnel;
 import de.rafael.modflared.tunnel.manager.TunnelManager;
-import net.minecraft.util.Pair;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.system.Platform;
@@ -57,9 +57,9 @@ public class DownloadedCloudflared extends Cloudflared {
                     TunnelManager.displayErrorToast();
                     completableFuture.complete(null);
                 } else {
-                    if(!pair.getLeft()) {
+                    if(!pair.getFirst()) {
                         Modflared.LOGGER.info("Update detected updating...");
-                        version = pair.getRight();
+                        version = pair.getSecond();
                         downloadAndSaveInfo().whenComplete((unused, throwable1) -> {
                             if (throwable1 != null) Modflared.LOGGER.error("Failed to download update", throwable1);
                             TunnelManager.displayErrorToast();
