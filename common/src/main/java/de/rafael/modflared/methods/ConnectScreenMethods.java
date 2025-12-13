@@ -7,13 +7,14 @@ import io.netty.channel.ChannelFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.network.Connection;
+import net.minecraft.server.network.EventLoopGroupHolder;
 import org.jetbrains.annotations.NotNull;
 
 import java.net.InetSocketAddress;
 
 public class ConnectScreenMethods {
 
-    public static ChannelFuture connect(@NotNull InetSocketAddress address, boolean useEpoll, Connection connection) {
+    public static @NotNull ChannelFuture connect(@NotNull InetSocketAddress address, EventLoopGroupHolder holder, Connection connection) {
         var status = Modflared.TUNNEL_MANAGER.handleConnect(address);
         Modflared.TUNNEL_MANAGER.prepareConnection(status, connection);
 
@@ -22,7 +23,7 @@ public class ConnectScreenMethods {
             ((IConnectScreen) connectScreen).setStatus(status);
         }
 
-        return Connection.connect(status.state() == TunnelStatus.State.USE ? status.runningTunnel().access().tunnelAddress() : address, useEpoll, connection);
+        return Connection.connect(status.state() == TunnelStatus.State.USE ? status.runningTunnel().access().tunnelAddress() : address, holder, connection);
     }
 
 }

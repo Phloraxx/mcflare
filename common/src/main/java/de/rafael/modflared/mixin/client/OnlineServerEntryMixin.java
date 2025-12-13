@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.multiplayer.ServerSelectionList;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -24,7 +24,7 @@ public abstract class OnlineServerEntryMixin extends ServerSelectionList.Entry {
     @Shadow @Final private ServerData serverData;
 
     @Unique
-    private static final ResourceLocation MODFLARED_INDICATOR_TEXTURE = ResourceLocation.fromNamespaceAndPath(Modflared.MOD_ID, "icon/indicator");
+    private static final Identifier MODFLARED_INDICATOR_TEXTURE = Identifier.fromNamespaceAndPath(Modflared.MOD_ID, "icon/indicator");
 
     @Inject(method = "renderContent", at = @At("TAIL"))
     public void renderContent(GuiGraphics graphics, int mouseX, int mouseY, boolean hovered, float deltaTicks, CallbackInfo callbackInfo) {
