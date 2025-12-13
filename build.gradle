@@ -192,7 +192,7 @@ tasks.register('publishCurseForge', TaskPublishCurseForge) {
     apiToken = System.getenv("CURSEFORGE_TOKEN")
 
     // The main file to upload
-    def mainFile = upload(curseforge_project_id, remapJar)
+    def mainFile = upload(curseforge_project_id, jar)
     mainFile.displayName = "${version} for ${minecraft_version}"
     mainFile.releaseType = mod_version_type
     mainFile.changelog = generateChangelog()
