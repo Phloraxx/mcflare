@@ -8,12 +8,12 @@ import dev.httxrafa.modflared.binary.Cloudflared;
 import dev.httxrafa.modflared.interfaces.mixin.IConnection;
 import dev.httxrafa.modflared.tunnel.RunningTunnel;
 import dev.httxrafa.modflared.tunnel.TunnelStatus;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
-import net.neoforged.fml.loading.FMLPaths;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class TunnelManager {
 
-    public static final File BASE_FOLDER = FMLPaths.GAMEDIR.get().resolve("modflared/").toFile();
+    public static final File BASE_FOLDER = FabricLoader.getInstance().getGameDir().resolve("modflared/").toFile();
     public static final File DATA_FOLDER = new File(BASE_FOLDER, "bin/");
     public static final File FORCED_TUNNELS_FILE = new File(BASE_FOLDER, "forced_tunnels.json");
 
