@@ -24,7 +24,7 @@ tasks.named('wrapper', Wrapper).configure {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-version = mod_version
+version = "${rootProject.mod_version}+${rootProject.mod_version_type}.${System.getenv("GITHUB_RUN_NUMBER") == null ? "dev" : System.getenv("GITHUB_RUN_NUMBER")}"
 group = mod_group_id
 
 repositories {}
