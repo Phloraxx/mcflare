@@ -4,9 +4,7 @@ on:
   pull_request:
   push:
     paths:
-      - fabric/**
-      - neoforge/**
-      - common/**
+      - src/**
       - build.gradle
       - gradle.properties
 jobs:

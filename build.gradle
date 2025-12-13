@@ -179,7 +179,7 @@ modrinth {
     versionName = "${version} for ${minecraft_version}"
     versionType = "${mod_version_type}"
     changelog = generateChangelog()
-    uploadFile = assemble
+    uploadFile = jar
     gameVersions = ["${minecraft_version}"]
 
     syncBodyFrom = rootProject.file("README.md").text;
