@@ -96,7 +96,7 @@ tasks.register('publishCurseForge', TaskPublishCurseForge) {
     apiToken = System.getenv("CURSEFORGE_TOKEN")
 
     // The main file to upload
-    def mainFile = upload(curseforge_project_id, remapJar)
+    def mainFile = upload(curseforge_project_id, jar)
     mainFile.displayName = "${version} for ${minecraft_version}"
     mainFile.releaseType = mod_version_type
     mainFile.changelog = generateChangelog()
@@ -121,7 +121,8 @@ static String generateChangelog() {
         for (JsonElement commit : commits) {
             JsonObject object = commit.getAsJsonObject();
             builder.append("- ");
-            builder.append('[').append(object.get("id").getAsString(), 0, 8).append(']').append('(').append(object.get("url").getAsString()).append(')');
+            builder.append('[').append(object.get("id").getAsString(), 0, 8).append(']')
+                    .append('(').append(object.get("url").getAsString()).append(')');
             builder.append(' ');
             builder.append(object.get("message").getAsString().split("\n")[0]);
             builder.append(" - ");
