@@ -124,6 +124,8 @@ curseforge {
                     format = ChangelogFormat.TEXT
                     from(generateChangelog())
                 }
+
+                from(tasks.named("jar"))
             }
         }
     }
