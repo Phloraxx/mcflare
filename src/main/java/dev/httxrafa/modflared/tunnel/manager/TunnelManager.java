@@ -232,6 +232,7 @@ public class TunnelManager {
 
     public static void displayErrorToast() {
         var minecraft = Minecraft.getInstance();
+        //noinspection ConstantValue
         if (minecraft == null || minecraft.gui == null) return;
         minecraft.gui.toastManager().addToast(new SystemToast(SystemToast.SystemToastId.PERIODIC_NOTIFICATION, Component.translatable("gui.toast.title.error"), Component.translatable("gui.toast.body.error")));
     }
