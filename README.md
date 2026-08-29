@@ -1,42 +1,91 @@
-# Modflared
-Automatically connects you to a [Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) without having to install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/) separately.
-#### This mod has not yet been fully tested!
+# MCflare
 
-## How to use
-To be able to use the mod you have to be on the operating system Windows, Linux, or MacOS.
+MCflare lets Minecraft clients reach origin-hidden servers through Cloudflare using one client mod and a normal server hostname.
 
-## Other resources
-For more detailed instructions, you can read [Adalie's blog post](https://dacubeking.com/2024/02/28/Proxying-Minecraft.html).
+**Player goal:** install MCflare once, enter `play.example.com`, join normally.
 
-## Configuring Cloudflared
-You need to set up cloudflare on your server for this to work. There's plenty of guides on how to do this elsewhere.  
-Make sure in your config file (possibly in `/etc/cloudflared/config.yml`) you have the lines:
-```YML
-- hostname: example.domain.net
-  service: tcp://localhost:25565
-```
-Replace `example.domain.net` with the correct subdomain you want to use. If you're running multiple instances (eg. with docker), change the port 25565 to whatever port you're using.  
-Restart the cloudflare daemon (`sudo systemctl restart cloudflared`) to apply the changes.
-Add the correct DNS entry: go to [Cloudflare dashboard](https://dash.cloudflare.net), go to your website and DNS entries, then add a new CNAME DNS entry with your subdomain and set the target to `<tunnelID>.cfargotunnel.com`, with the tunnel ID found in the cloudflare config.yml file.
-### Example DNS Entries
-![Example CNAME](https://raw.githubusercontent.com/HttpRafa/modflared/refs/heads/neoforge/1.21.11/.github/images/dns_cname.png)
-![Example TXT](https://raw.githubusercontent.com/HttpRafa/modflared/refs/heads/neoforge/1.21.11/.github/images/dns_txt.png)
+**Admin goal:** publish one Cloudflare Tunnel hostname. No TXT discovery record, player-side `cloudflared`, WARP, localhost command, or custom launcher is required.
 
-### For Players
-If your server admin has properly configured their server you should be able to connect to the server as usual. 
-No extra configuration is needed.
+> Status: experimental. Fabric 26.2 is proven end-to-end. The transport core and Enhanced gateway compile to Java 8 for reuse by legacy and modern loader adapters.
 
-If your server admin has not properly configured their server, you will need to add their server to the `forced_tunnels.json` file in the modflared config folder. 
-#### Example configuration (modflared/forced_tunnels.json)
-```JSON
-["example.domain.net", "example2.domain.net"]
+## Modes
+
+| | Basic | Enhanced |
+|---|---|---|
+| Tunnel origin | `tcp://minecraft:25565` | `http://mcflare:25577` |
+| Server gateway | none | one MCflare process |
+| Minecraft | yes | yes |
+| Separate TCP/UDP mod services | no | yes |
+| Cloudflare source-IP header at gateway | no | yes |
+| Player experience | identical | identical |
+
+Basic is the minimum setup. Enhanced is the recommended path when the server needs voice/side services, connection policy, or source-IP-aware gateway controls.
+
+## Basic setup
+
+```yaml
+ingress:
+  - hostname: play.example.com
+    service: tcp://127.0.0.1:25565
+  - service: http_status:404
 ```
 
-### Server Admins (Setting Up cloudflared)
-Install Cloudflared as described in the “Configuring Cloudflared” part above.
+The client opens `wss://play.example.com/.well-known/mcflare` and sends a real Minecraft status handshake. If a valid Minecraft status response comes back, MCflare uses WSS for the game stream. Otherwise Minecraft uses its normal TCP/SRV route.
 
-#### Telling modflared to use connect to your server using cloudflared
-For the hostname that you want your players to connect to (eg. `example.domain.net`), create a TXT dns record with either of the following values:
-- `cloudflared-use-tunnel` - This will make modflared connect to the tunnel on the hostname itself (eg. `example.domain.net`)
-- `cloudflared-route=<route>` - This will make modflared connect to the tunnel under the hostname of `<route>`. 
-(ex. setting `cloudflared-route=example2.domain.net` will make modflared connect to the tunnel on `example2.domain.net` instead of `example.domain.net`)
+No special DNS metadata is required.
+
+## Enhanced setup
+
+Run the gateway locally:
+
+```bash
+java -jar mcflare-gateway.jar \
+  127.0.0.1:25577 \
+  127.0.0.1:25565 \
+  voicechat=udp://127.0.0.1:24454
+```
+
+Then publish it as HTTP:
+
+```yaml
+ingress:
+  - hostname: play.example.com
+    service: http://127.0.0.1:25577
+  - service: http_status:404
+```
+
+Enhanced mode terminates WebSocket locally, then dispatches the byte stream:
+
+```text
+Minecraft bytes -> Minecraft backend
+MCF1 + HELLO -> capability response
+MCF1 + OPEN_STREAM -> configured TCP service
+MCF1 + OPEN_DATAGRAM -> configured UDP service
+```
+
+The gateway is intentionally one process. It also sees Cloudflare HTTP metadata such as the presence of `CF-Connecting-IP` and `CF-Ray`; the origin should remain private so those headers cannot be spoofed by direct Internet clients.
+
+## Compatibility model
+
+Most mods need no MCflare integration because their packets already travel inside Minecraft's connection. Only mods that create separate sockets need an adapter.
+
+- `core/` — dependency-free Java 8 RFC6455 carrier, discovery, and Enhanced service protocol.
+- `gateway/` — one Java 8 HTTP/WebSocket gateway for Minecraft plus optional stream/datagram services.
+- root module — current Fabric 26.2 connection hooks.
+- future loader adapters — thin hooks that reuse `core/`; they should not reimplement transport.
+
+Simple Voice Chat is the first planned side-service adapter because its public API supports replacing the client voice socket. WSS datagrams are the compatibility fallback; native realtime UDP/TURN remains the preferred future voice path if latency/loss testing justifies it.
+
+## Build
+
+```bash
+./gradlew clean build
+```
+
+Core protocol tests run as part of `build`. CI performs the same clean build on every push and pull request.
+
+See `docs/DESIGN.md` and `docs/TEST_MATRIX.md` for the constraints and current proof gates.
+
+## Attribution
+
+MCflare retains the MIT license and attribution for code derived from the original Modflared project. See `NOTICE.md`.

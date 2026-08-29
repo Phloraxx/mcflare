@@ -1,32 +1,25 @@
 {
   "schemaVersion": 1,
-  "id": "modflared",
+  "id": "mcflare",
   "version": "${version}",
-  "name": "Modflared",
-  "description": "Automatically connects you to a Cloudflare tunnel without having to install cloudflared separately.",
-  "authors": [
-    "HttpRafa",
-    "Contributers"
-  ],
+  "name": "MCflare",
+  "description": "Transparent Minecraft transport over WebSocket-compatible tunnels, with zero-config active discovery.",
+  "authors": ["Phloraxx"],
+  "contributors": ["HttpRafa (original Modflared project)"],
   "contact": {
-    "homepage": "https://modrinth.com/mod/modflared",
-    "sources": "https://github.com/HttpRafa/modflared"
+    "sources": "https://github.com/Phloraxx/mcflare",
+    "issues": "https://github.com/Phloraxx/mcflare/issues"
   },
   "license": "MIT",
-  "icon": "assets/modflared/icon.png",
+  "icon": "assets/mcflare/icon.png",
   "environment": "client",
   "entrypoints": {
-    "client": [
-      "dev.httxrafa.modflared.Modflared"
-	]
+    "client": ["io.mcflare.client.McflareClient"]
   },
-  "mixins": [
-    "modflared.mixins.json"
-  ],
+  "mixins": ["mcflare.mixins.json"],
   "depends": {
     "fabricloader": ">=${loader_version}",
     "minecraft": "~${minecraft_version}",
-    "java": ">=21",
-    "fabric-api": "*"
+    "java": ">=25"
   }
 }
