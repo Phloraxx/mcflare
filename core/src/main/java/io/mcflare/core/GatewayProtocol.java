@@ -30,10 +30,10 @@ public final class GatewayProtocol {
     }
 
     public static byte[] servicePreamble(int opcode, String serviceId) {
-        byte[] id = serviceId.getBytes(StandardCharsets.UTF_8);
-        if (id.length < 1 || id.length > MAX_SERVICE_ID_BYTES) {
-            throw new IllegalArgumentException("invalid service id length");
+        if (!isValidServiceId(serviceId)) {
+            throw new IllegalArgumentException("invalid service id");
         }
+        byte[] id = serviceId.getBytes(StandardCharsets.UTF_8);
         byte[] result = new byte[MAGIC.length + 3 + id.length];
         System.arraycopy(MAGIC, 0, result, 0, MAGIC.length);
         result[4] = (byte) VERSION;
@@ -41,6 +41,21 @@ public final class GatewayProtocol {
         result[6] = (byte) id.length;
         System.arraycopy(id, 0, result, 7, id.length);
         return result;
+    }
+
+    public static boolean isValidServiceId(String serviceId) {
+        if (serviceId == null || serviceId.length() == 0) return false;
+        byte[] encoded = serviceId.getBytes(StandardCharsets.UTF_8);
+        if (encoded.length > MAX_SERVICE_ID_BYTES) return false;
+        for (int i = 0; i < serviceId.length(); i++) {
+            char c = serviceId.charAt(i);
+            boolean safe = c >= 'a' && c <= 'z'
+                    || c >= 'A' && c <= 'Z'
+                    || c >= '0' && c <= '9'
+                    || c == '.' || c == '_' || c == '-';
+            if (!safe) return false;
+        }
+        return true;
     }
 
     public static boolean hasMagic(byte[] data) {

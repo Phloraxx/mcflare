@@ -33,19 +33,25 @@ public final class TunnelManager {
 
     public RunningTunnel createTunnel(String host) {
         try {
-            var tunnel = RunningTunnel.create(host);
+            var tunnel = RunningTunnel.create(host, error -> {
+                invalidateHost(host);
+                McflareClient.LOGGER.debug("MCflare carrier stream closed for {}: {}",
+                        host, error.toString());
+            });
             synchronized (runningTunnels) { runningTunnels.add(tunnel); }
-            McflareClient.LOGGER.info("MCflare carrier ready for {} on {}", host, tunnel.access().tunnelAddress());
+            McflareClient.LOGGER.info("MCflare carrier ready for {} on {}",
+                    host, tunnel.access().tunnelAddress());
             return tunnel;
         } catch (Exception e) {
-            McflareClient.LOGGER.error("Failed to create MCflare carrier for " + host, e);
-            return null;
+            invalidateHost(host);
+            throw new IllegalStateException(
+                    "MCflare secure transport unavailable for " + host, e);
         }
     }
 
     public void closeTunnel(@NotNull RunningTunnel runningTunnel) {
         synchronized (runningTunnels) { runningTunnels.remove(runningTunnel); }
-        runningTunnel.closeTunnel();
+        runningTunnel.close();
     }
 
     public void closeTunnels() {
@@ -54,7 +60,7 @@ public final class TunnelManager {
             copy = List.copyOf(runningTunnels);
             runningTunnels.clear();
         }
-        copy.forEach(RunningTunnel::closeTunnel);
+        copy.forEach(RunningTunnel::close);
     }
 
     public boolean shouldUseTunnel(String logicalHost, int logicalPort, InetSocketAddress resolvedAddress) {
@@ -141,14 +147,14 @@ public final class TunnelManager {
     public TunnelStatus handleConnect(String logicalHost, int logicalPort, @NotNull InetSocketAddress resolvedAddress) {
         String host = normalizeHost(logicalHost);
         if (!shouldUseTunnel(host, logicalPort, resolvedAddress)) {
-            return new TunnelStatus(null, TunnelStatus.State.DONT_USE);
+            return TunnelStatus.direct();
         }
+        return TunnelStatus.mcflare(createTunnel(host));
+    }
 
-        var tunnel = createTunnel(host);
-        if (tunnel == null) {
-            return new TunnelStatus(null, TunnelStatus.State.FAILED_TO_DETERMINE);
-        }
-        return new TunnelStatus(tunnel, TunnelStatus.State.USE);
+    private void invalidateHost(String host) {
+        String prefix = normalizeHost(host) + ":";
+        probeCache.keySet().removeIf(key -> key.startsWith(prefix));
     }
 
     private static String normalizeHost(String host) {

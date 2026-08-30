@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GatewayProtocolTest {
@@ -26,6 +27,15 @@ class GatewayProtocolTest {
         int length = frame[6] & 0xFF;
         assertEquals("voicechat",
                 new String(frame, 7, length, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void serviceIdsAreJsonAndProtocolSafe() {
+        assertTrue(GatewayProtocol.isValidServiceId("voicechat"));
+        assertTrue(GatewayProtocol.isValidServiceId("mod.service-1"));
+        assertFalse(GatewayProtocol.isValidServiceId("bad\"id"));
+        assertFalse(GatewayProtocol.isValidServiceId("bad id"));
+        assertFalse(GatewayProtocol.isValidServiceId(""));
     }
 
     @Test

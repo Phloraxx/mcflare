@@ -19,7 +19,8 @@ import java.util.Map;
 final class WebSocketServerConnection implements Closeable {
     private static final String WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private static final int MAX_HEADERS = 64 * 1024;
-    private static final int MAX_FRAME = 32 * 1024 * 1024;
+    private static final int MAX_FRAME = 1024 * 1024;
+    private static final int HANDSHAKE_TIMEOUT_MS = 10_000;
 
     private final Socket socket;
     private final InputStream input;
@@ -43,6 +44,7 @@ final class WebSocketServerConnection implements Closeable {
             throws IOException {
         socket.setTcpNoDelay(true);
         socket.setKeepAlive(true);
+        socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
         UpgradeRequest request = readUpgrade(socket.getInputStream());
         if (!requiredPath.equals(request.path)) {
             writeHttpError(socket.getOutputStream(), 404, "Not found");
@@ -50,6 +52,7 @@ final class WebSocketServerConnection implements Closeable {
         }
         validateUpgrade(request.headers);
         writeUpgrade(socket.getOutputStream(), request.headers.get("sec-websocket-key"));
+        socket.setSoTimeout(0);
         return new WebSocketServerConnection(socket, request.headers);
     }
 
@@ -120,7 +123,7 @@ final class WebSocketServerConnection implements Closeable {
             long length = second & 0x7F;
             if (length == 126) length = readUnsigned(2);
             else if (length == 127) length = readUnsigned(8);
-            if (length > MAX_FRAME || length > Integer.MAX_VALUE) {
+            if (length < 0 || length > MAX_FRAME || length > Integer.MAX_VALUE) {
                 throw new IOException("WebSocket frame too large: " + length);
             }
             if (opcode >= 0x8 && (!fin || length > 125)) {
@@ -187,10 +190,28 @@ final class WebSocketServerConnection implements Closeable {
     private static void validateUpgrade(Map<String, String> headers) throws IOException {
         String key = headers.get("sec-websocket-key");
         String upgrade = headers.get("upgrade");
+        String connection = headers.get("connection");
         String version = headers.get("sec-websocket-version");
-        if (key == null || !"websocket".equalsIgnoreCase(upgrade) || !"13".equals(version)) {
+        if (key == null || !"websocket".equalsIgnoreCase(upgrade)
+                || !containsToken(connection, "upgrade") || !"13".equals(version)) {
             throw new IOException("invalid WebSocket upgrade");
         }
+        try {
+            if (Base64.getDecoder().decode(key.trim()).length != 16) {
+                throw new IOException("invalid Sec-WebSocket-Key");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IOException("invalid Sec-WebSocket-Key", e);
+        }
+    }
+
+    private static boolean containsToken(String value, String expected) {
+        if (value == null) return false;
+        String[] tokens = value.split(",");
+        for (String token : tokens) {
+            if (expected.equalsIgnoreCase(token.trim())) return true;
+        }
+        return false;
     }
 
     private static UpgradeRequest readUpgrade(InputStream input) throws IOException {

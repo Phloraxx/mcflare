@@ -18,12 +18,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 /** Enhanced-mode WebSocket gateway for Minecraft and optional side services. */
 public final class McflareGateway {
+    private static final int MAX_CONNECTIONS = 256;
+
     private final InetSocketAddress listen;
     private final InetSocketAddress minecraft;
     private final Map<String, ServiceTarget> services;
+    private final Semaphore connectionSlots = new Semaphore(MAX_CONNECTIONS);
 
     private McflareGateway(InetSocketAddress listen, InetSocketAddress minecraft,
                            Map<String, ServiceTarget> services) {
@@ -52,8 +56,15 @@ public final class McflareGateway {
                 + " services=" + services.keySet());
         while (true) {
             final Socket client = server.accept();
+            if (!connectionSlots.tryAcquire()) {
+                rejectBusy(client);
+                continue;
+            }
             Thread thread = new Thread(new Runnable() {
-                @Override public void run() { handle(client); }
+                @Override public void run() {
+                    try { handle(client); }
+                    finally { connectionSlots.release(); }
+                }
             }, "mcflare-gateway-" + client.getPort());
             thread.setDaemon(true);
             thread.start();
@@ -144,7 +155,11 @@ public final class McflareGateway {
         if (length < 1 || length > GatewayProtocol.MAX_SERVICE_ID_BYTES) {
             throw new IOException("invalid service id length");
         }
-        return new String(readExact(input, length), StandardCharsets.UTF_8);
+        String serviceId = new String(readExact(input, length), StandardCharsets.UTF_8);
+        if (!GatewayProtocol.isValidServiceId(serviceId)) {
+            throw new IOException("invalid service id");
+        }
+        return serviceId;
     }
 
     private static void writeControl(OutputStream output, int opcode, String payload)
@@ -294,8 +309,8 @@ public final class McflareGateway {
         }
         String id = value.substring(0, equals);
         String endpoint = value.substring(equals + 1);
-        if (id.getBytes(StandardCharsets.UTF_8).length > GatewayProtocol.MAX_SERVICE_ID_BYTES) {
-            throw new IllegalArgumentException("service id too long: " + id);
+        if (!GatewayProtocol.isValidServiceId(id)) {
+            throw new IllegalArgumentException("invalid service id: " + id);
         }
         if (endpoint.startsWith("tcp://")) {
             return new ServiceTarget(id, ServiceKind.STREAM, parseAddress(endpoint.substring(6)));
@@ -314,6 +329,22 @@ public final class McflareGateway {
         return new InetSocketAddress(
                 value.substring(0, colon), Integer.parseInt(value.substring(colon + 1)));
     }
+    private static void rejectBusy(Socket client) {
+        try {
+            byte[] body = "MCflare gateway busy".getBytes(StandardCharsets.UTF_8);
+            String headers = "HTTP/1.1 503 Service Unavailable\r\n"
+                    + "Content-Length: " + body.length + "\r\n"
+                    + "Connection: close\r\n\r\n";
+            OutputStream output = client.getOutputStream();
+            output.write(headers.getBytes(StandardCharsets.US_ASCII));
+            output.write(body);
+            output.flush();
+        } catch (IOException ignored) {
+        } finally {
+            closeQuietly(client);
+        }
+    }
+
     private static void joinQuietly(Thread thread) {
         try { thread.join(1000L); }
         catch (InterruptedException e) { Thread.currentThread().interrupt(); }

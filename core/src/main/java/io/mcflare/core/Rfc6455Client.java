@@ -31,7 +31,10 @@ public final class Rfc6455Client implements Closeable {
     private final OutputStream output;
     private final SecureRandom random = new SecureRandom();
     private final Object writeLock = new Object();
+    private final byte[] writeScratch = new byte[16 * 1024];
+    private final byte[] maskKey = new byte[4];
     private volatile boolean closed;
+    private boolean fragmented;
 
     private Rfc6455Client(Socket socket) throws IOException {
         this.socket = socket;
@@ -46,7 +49,9 @@ public final class Rfc6455Client implements Closeable {
 
         Socket raw = new Socket();
         raw.connect(new InetSocketAddress(host, port), connectTimeoutMs);
-        raw.setSoTimeout(readTimeoutMs);
+        raw.setTcpNoDelay(true);
+        raw.setKeepAlive(true);
+        raw.setSoTimeout(connectTimeoutMs);
 
         SSLSocket ssl = null;
         try {
@@ -56,6 +61,7 @@ public final class Rfc6455Client implements Closeable {
             ssl.startHandshake();
             Rfc6455Client client = new Rfc6455Client(ssl);
             client.upgrade(host, port, path);
+            ssl.setSoTimeout(readTimeoutMs);
             return client;
         } catch (IOException | RuntimeException e) {
             try { if (ssl != null) ssl.close(); else raw.close(); } catch (IOException ignored) {}
@@ -97,18 +103,31 @@ public final class Rfc6455Client implements Closeable {
 
         String expectedAccept = websocketAccept(key);
         String actualAccept = null;
+        String upgrade = null;
+        String connection = null;
         for (int i = 1; i < lines.length; i++) {
             int colon = lines[i].indexOf(':');
             if (colon <= 0) continue;
             String name = lines[i].substring(0, colon).trim().toLowerCase(Locale.ROOT);
-            if ("sec-websocket-accept".equals(name)) {
-                actualAccept = lines[i].substring(colon + 1).trim();
-                break;
-            }
+            String value = lines[i].substring(colon + 1).trim();
+            if ("sec-websocket-accept".equals(name)) actualAccept = value;
+            else if ("upgrade".equals(name)) upgrade = value;
+            else if ("connection".equals(name)) connection = value;
         }
-        if (!expectedAccept.equals(actualAccept)) {
-            throw new IOException("Invalid Sec-WebSocket-Accept");
+        if (!expectedAccept.equals(actualAccept)
+                || !"websocket".equalsIgnoreCase(upgrade)
+                || !containsToken(connection, "upgrade")) {
+            throw new IOException("Invalid WebSocket upgrade response");
         }
+    }
+
+    private static boolean containsToken(String value, String expected) {
+        if (value == null) return false;
+        String[] tokens = value.split(",");
+        for (String token : tokens) {
+            if (expected.equalsIgnoreCase(token.trim())) return true;
+        }
+        return false;
     }
 
     private static String readHeaders(InputStream in) throws IOException {
@@ -177,11 +196,17 @@ public final class Rfc6455Client implements Closeable {
                 }
             }
 
-            byte[] mask = new byte[4];
-            random.nextBytes(mask);
-            output.write(mask);
-            for (int i = 0; i < length; i++) {
-                output.write(data[offset + i] ^ mask[i & 3]);
+            random.nextBytes(maskKey);
+            output.write(maskKey);
+            int written = 0;
+            while (written < length) {
+                int chunk = Math.min(writeScratch.length, length - written);
+                for (int i = 0; i < chunk; i++) {
+                    writeScratch[i] = (byte) (data[offset + written + i]
+                            ^ maskKey[(written + i) & 3]);
+                }
+                output.write(writeScratch, 0, chunk);
+                written += chunk;
             }
             output.flush();
         }
@@ -198,6 +223,7 @@ public final class Rfc6455Client implements Closeable {
             int opcode = first & 0x0F;
             boolean fin = (first & 0x80) != 0;
             boolean masked = (second & 0x80) != 0;
+            if (masked) throw new IOException("Server WebSocket frame must not be masked");
             long length = second & 0x7F;
             if (length == 126) length = readUnsigned(2);
             else if (length == 127) {
@@ -212,11 +238,7 @@ public final class Rfc6455Client implements Closeable {
                 throw new IOException("WebSocket frame too large: " + length);
             }
 
-            byte[] mask = masked ? readExact(4) : null;
             byte[] payload = readExact((int) length);
-            if (masked) {
-                for (int i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
-            }
 
             if (opcode == 0x8) {
                 closed = true;
@@ -227,7 +249,16 @@ public final class Rfc6455Client implements Closeable {
                 continue;
             }
             if (opcode == 0xA) continue;
-            if (opcode == 0x2 || opcode == 0x0) return payload;
+            if (opcode == 0x2) {
+                if (fragmented) throw new IOException("Nested fragmented WebSocket message");
+                fragmented = !fin;
+                return payload;
+            }
+            if (opcode == 0x0) {
+                if (!fragmented) throw new IOException("Unexpected WebSocket continuation frame");
+                if (fin) fragmented = false;
+                return payload;
+            }
             if (opcode == 0x1) throw new IOException("Unexpected text WebSocket frame");
             throw new IOException("Unsupported WebSocket opcode: " + opcode);
         }
@@ -268,9 +299,8 @@ public final class Rfc6455Client implements Closeable {
                     // Best effort close frame. An empty client close frame is valid.
                     output.write(0x88);
                     output.write(0x80);
-                    byte[] mask = new byte[4];
-                    random.nextBytes(mask);
-                    output.write(mask);
+                    random.nextBytes(maskKey);
+                    output.write(maskKey);
                     output.flush();
                 }
             }

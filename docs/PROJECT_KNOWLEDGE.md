@@ -1,0 +1,486 @@
+# MCflare project knowledge
+
+> Canonical engineering record. Updated 2026-08-30.
+>
+> This document records what is proven, what is inferred, what is deliberately excluded, and why. Update it whenever an architectural decision or test result changes.
+
+## 1. Problem
+
+MCflare lets a Minecraft client reach a server whose origin IP and Minecraft port are not publicly exposed. The public hostname terminates at Cloudflare; the server-side `cloudflared` connector reaches the private/local Minecraft service.
+
+The target UX is intentionally small:
+
+- Player: install one Minecraft mod, enter the normal server hostname, join.
+- Admin: publish one hostname through Cloudflare Tunnel; no MCflare TXT record or player-specific configuration.
+- Player machines must not install or launch `cloudflared`, WARP, or a separate proxy executable.
+- Ordinary Minecraft servers must continue to work normally with MCflare installed.
+
+The project is experimental. Fabric 26.2 is the only Minecraft adapter currently proven end-to-end.
+## 2. Non-negotiable invariants
+
+1. Once a hostname is positively identified as MCflare, connection failure is **fail closed**. Never fall back to direct TCP for that attempt.
+2. Client discovery uses the logical hostname the player entered, not an SRV-resolved backend hostname.
+3. Direct/ordinary Minecraft still uses Minecraft's normal DNS/SRV-resolved destination.
+4. MCflare does not parse gameplay packets. The base transport carries an ordered byte stream.
+5. Arbitrary side-service backend addresses are never client selectable; the gateway exposes only admin-configured service IDs.
+6. The gateway is not an Internet-facing origin. Bind it to loopback/private networking and let `cloudflared` reach it.
+7. `CF-Connecting-IP` or other proxy identity metadata is trusted only when the gateway is reachable exclusively through trusted Cloudflare infrastructure.
+8. The shared transport core stays independent of Minecraft, Fabric, Forge, NeoForge, Netty, and external helper processes.
+9. Add compatibility adapters only when software opens a network path outside Minecraft's own connection.
+10. Do not add transparent session replay/resume until measured production failures justify its complexity.
+
+These invariants take precedence over convenience features.
+## 3. Architecture
+
+### Basic mode
+
+```text
+Minecraft + MCflare
+        |
+        | WSS :443
+        v
+Cloudflare edge
+        |
+Cloudflare Tunnel
+        |
+tcp://127.0.0.1:25565
+        |
+Minecraft server
+```
+
+The server needs only `cloudflared`; there is no MCflare server component. This is the minimum-admin-setup mode.
+
+Important qualification: Cloudflare documents TCP published applications as TCP streamed over WebSocket with `cloudflared access tcp` on the client. MCflare's dependency-free WebSocket carrier has been experimentally proven compatible with that wire behavior, but Cloudflare does not document a stable third-party custom-client protocol contract. Treat Basic mode as proven but more compatibility-sensitive than Enhanced mode.
+### Enhanced mode
+
+```text
+Minecraft + MCflare
+        |
+        | standards-based WSS :443
+        v
+Cloudflare edge
+        |
+Cloudflare HTTP Tunnel
+        |
+http://127.0.0.1:25577
+        |
+MCflare Gateway
+   |            |
+Minecraft    side services
+```
+
+Enhanced mode terminates a normal HTTP/WebSocket upgrade at the gateway. The same public hostname carries Minecraft plus optional MCF1 service channels. It is the recommended production direction when source-IP-aware controls, voice, or other side services are required.
+
+The original two-process Enhanced PoC (`HTTP edge -> raw gateway -> Minecraft`) was deliberately collapsed into one gateway process after tests proved the extra hop added no value.
+## 4. Zero-config discovery
+
+No TXT record, custom SRV metadata, Cloudflare IP-range guessing, or local configuration file is required.
+
+For a player-entered hostname such as `play.example.com`, MCflare probes:
+
+```text
+wss://play.example.com/.well-known/mcflare
+```
+
+The probe sends a real Minecraft Status handshake and requires a parseable Minecraft Status response. A generic website merely supporting WebSockets is therefore not enough to be classified as MCflare.
+
+The adapter supplies the actual Minecraft client protocol version when available. The loader-independent core supports an unknown-version fallback only for tooling/tests.
+
+The path itself is not a secret or authentication mechanism. Its purpose is deterministic routing and protocol identification.
+### DNS and SRV rule
+
+Minecraft can transform the name a player typed into another host/port through `_minecraft._tcp` SRV resolution. MCflare must preserve both identities:
+
+```text
+logical host:   play.example.com
+resolved socket: backend.example.net:25001
+```
+
+- WSS discovery always uses the logical host.
+- Ordinary direct TCP uses Minecraft's resolved socket.
+
+This prevents an SRV backend name from accidentally becoming the public MCflare identity while preserving vanilla SRV behavior for normal servers.
+
+Numeric IPv4 and IPv6 literals are not auto-probed in v1 because TLS/SNI and the origin-hiding model are hostname-oriented.
+### Discovery timing and cache
+
+Current policy:
+
+- Positive MCflare result: cache for 10 minutes.
+- Negative/ordinary result: cache for 30 seconds.
+- Duplicate in-flight probes for the same host/port are serialized.
+- Direct TCP reachability timeout: 1.2 seconds.
+- If direct TCP is reachable, MCflare gets a 1.5-second secure-preference grace before direct is selected.
+- If direct TCP is not reachable, the WSS probe can use the full 4.5-second discovery timeout.
+
+This intentionally prefers MCflare when both direct and protected paths exist, reducing the chance that an accidentally exposed origin wins purely because TCP connected first.
+
+Server-list pings run on Minecraft's worker pool and normal joins run on the Server Connector thread in the proven 26.2 adapter, so discovery does not block the render/UI thread.
+### Fail-closed state model
+
+The client routing result has only two legal states:
+
+```text
+DIRECT   -> no MCflare carrier
+MCFLARE  -> exactly one MCflare carrier
+```
+
+`TunnelStatus` enforces this invariant. The old inherited `FAILED_TO_DETERMINE` state was removed because it allowed a dangerous interpretation: protected server detected, carrier creation failed, then connect directly.
+
+Current behavior is:
+
+```text
+not MCflare -> direct TCP may be used
+MCflare detected -> secure carrier is mandatory
+carrier/WSS failure -> connection fails and the positive cache is invalidated
+```
+
+There is no intentional direct fallback after positive MCflare classification.
+## 5. Client transport core
+
+`core/` is intentionally dependency-free Java 8 transport/protocol code. It contains:
+
+- `Rfc6455Client` — TLS + RFC6455 client.
+- `WebSocketByteStream` — treats fragmented WebSocket delivery as an ordered byte stream where needed.
+- `MinecraftStatusProbe` — encodes/decodes discovery status traffic.
+- `LoopbackCarrier` — local TCP listener that maps Minecraft's byte stream to WSS without a helper process.
+- `GatewayProtocol` — shared MCF1 constants/limits.
+- `GatewayControlClient` and `GatewayDatagramClient` — Enhanced side-service clients.
+
+The current Minecraft adapter still uses an in-process loopback socket because it is simple and keeps Minecraft seeing ordinary TCP. A future direct Netty transport is not justified unless profiling proves the loopback hop matters.
+### RFC6455/TLS hardening currently implemented
+
+- TLS endpoint identification is enabled and SNI is set for DNS hostnames.
+- TCP connect/TLS/WebSocket establishment is bounded; the session becomes unbounded-read only after a successful upgrade.
+- Client frames are masked; masking is done in bulk rather than byte-at-a-time writes.
+- Server frames are required to be unmasked.
+- RSV bits, control-frame limits, continuation state, nested fragmentation, close/ping/pong, and 64-bit lengths are validated.
+- Client heartbeat sends a WebSocket Ping about every 30 seconds during an active carrier.
+- Local loopback sockets use `TCP_NODELAY` and keepalive.
+- Expected local stream shutdown is separated from unexpected WSS failure so normal status-ping closure does not invalidate discovery cache.
+
+The transport is a byte carrier; WebSocket frame boundaries are never treated as Minecraft packet boundaries.
+## 6. Enhanced MCF1 protocol
+
+Every side-service stream starts with:
+
+```text
+'M' 'C' 'F' '1' | version | opcode
+```
+
+Version 1 operations:
+
+- `HELLO` — return gateway capabilities.
+- `OPEN_STREAM` — connect to one admin-configured TCP service.
+- `OPEN_DATAGRAM` — connect to one admin-configured UDP service.
+- `ERROR` — protocol/service failure.
+
+Service IDs are 1..64 UTF-8 bytes and restricted to ASCII letters, digits, `.`, `_`, and `-`. This keeps the protocol/config/JSON representation unambiguous.
+
+The client never sends an IP address or backend port. `voicechat`, for example, maps to a target supplied only in the gateway's server-side configuration.
+### Datagram records
+
+WebSocket frame boundaries are not application record boundaries. This was discovered experimentally when Cloudflare split one MCF1 response across frames.
+
+MCF1 datagrams therefore use explicit framing:
+
+```text
+u16 length | datagram bytes
+```
+
+The v1 maximum datagram is 8192 bytes. This is intentionally conservative: it is comfortably above normal compressed voice payloads while preventing oversized allocations and platform-dependent giant-UDP behavior.
+
+The Cloudflare WSS path has been verified byte-perfect for datagrams of 1, 20, 256, 1200, 4096, and 8192 bytes.
+## 7. Enhanced gateway security boundary
+
+The gateway intentionally remains a small blocking/thread-per-connection Java 8 server instead of introducing a framework. Hardening is applied around that simple model:
+
+- Default/recommended listener is loopback/private only.
+- Maximum concurrent accepted connections: 256.
+- The 257th connection is rejected immediately with HTTP 503; this behavior was adversarially tested.
+- HTTP/WebSocket handshake timeout: 10 seconds.
+- Maximum inbound WebSocket frame: 1 MiB.
+- WebSocket client masking and upgrade headers are validated.
+- `Sec-WebSocket-Key` must decode to exactly 16 bytes.
+- Side services are allowlisted by server configuration.
+
+These are resource/sanity limits, not a replacement for Cloudflare edge protections or Minecraft authentication.
+### Source IP and trusted headers
+
+Basic `tcp://` mode does not preserve the player's source IP at the Minecraft origin. The origin sees the proxied/Tunnel-side connection.
+
+Enhanced HTTP/WSS mode experimentally received both `CF-Connecting-IP` and `CF-Ray` at the gateway, matching Cloudflare's HTTP proxy documentation.
+
+Do not blindly inject `CF-Connecting-IP` into Minecraft as if the socket originated there. Safe future integrations include:
+
+- MCflare server mod/plugin identity API.
+- Velocity/Bungee trusted forwarding adapter.
+- Paper/server plugin integration.
+- Gateway-only rate limiting/audit controls.
+
+A directly Internet-reachable gateway would let clients forge proxy headers. Therefore trusted source identity requires the gateway listener to remain private and reachable only through the controlled Tunnel path.
+## 8. Version and loader strategy
+
+“Universal” means one reusable network engine plus thin version/loader hooks; it does not mean claiming untested Minecraft versions.
+
+`mcflare-core` compiles to Java 8 bytecode and was also executed successfully on a real Temurin 8u504 runtime against a live Cloudflare/Minecraft endpoint. That proves the transport runtime floor, not the loader hooks.
+
+Current adapter status:
+
+| Minecraft family | Loader | Status |
+|---|---|---|
+| 26.2 | Fabric | proven full login |
+| 26.2 | Quilt | pending compatibility proof |
+| 26.2 | NeoForge | pending |
+| 26.2 | Forge | pending |
+| 1.20.1 | Fabric/Forge | pending |
+| 1.12.2 | Forge | planned first legacy proof |
+| 1.8.9 | Forge | pending |
+
+Support is claimed only after a real build plus status/login regression on that version/loader.
+### Adapter rule
+
+Version-specific code should do only what cannot live in `core`:
+
+1. Capture the logical hostname/port before SRV loses that identity.
+2. Intercept Minecraft's outbound connection creation.
+3. Ask the shared manager whether the route is direct or MCflare.
+4. Redirect to the in-process loopback carrier when MCflare is selected.
+5. Attach carrier lifecycle cleanup to Minecraft's connection lifecycle.
+6. Provide the current Minecraft protocol version to discovery.
+
+The current Fabric 26.2 implementation requires only three mixins: join interception, server-list ping interception, and connection cleanup. Decorative status UI mixins inherited from the PoC were removed.
+## 9. Mod compatibility model
+
+Most Minecraft mods do **not** need MCflare-specific support. Anything already encoded inside the Minecraft connection is carried transparently, including normal packets, Fabric/Forge/NeoForge custom payloads, plugin messages, login handshakes, inventory/chunk/entity traffic, and server plugin channels.
+
+Client-only graphics/UI/performance mods should be unrelated to MCflare unless they replace networking themselves.
+
+Special handling is needed only when a mod/service opens another network socket:
+
+- Separate TCP service -> MCF1 `OPEN_STREAM`.
+- Separate UDP service -> MCF1 `OPEN_DATAGRAM` fallback or a future realtime transport.
+- Prefer the mod's documented socket/add-on API.
+- Avoid OS-wide packet interception and fragile mixins into another mod's internals.
+
+Unknown arbitrary mod protocols are not automatically guessed. They either already ride Minecraft's connection or need an explicit adapter/service declaration.
+### Simple Voice Chat
+
+Simple Voice Chat uses a separate UDP path (default port 24454), so it does not automatically ride Minecraft TCP. Its current 26.2 project supports Fabric, Forge, NeoForge, Quilt, Paper/Bukkit-family servers, and common proxies, and exposes a public voice-chat API.
+
+The integration direction is an optional adapter using its official socket-replacement/plugin API, not packet interception. MCflare should remain fully functional when Simple Voice Chat is absent.
+
+Planned fallback path:
+
+```text
+Simple Voice Chat client socket
+ -> MCflare datagram client
+ -> WSS
+ -> Cloudflare
+ -> MCflare Gateway
+ -> UDP 127.0.0.1:24454
+```
+
+The dependency/API should be added only in the dedicated voice adapter commit; it is intentionally absent from the hardened transport baseline.
+### Voice transport choice
+
+WSS datagrams are functionally proven but should be treated as the compatibility fallback, not automatically the preferred realtime path. A 60-packet test using 200-byte voice-like request/reply payloads through a temporary Quick Tunnel measured roughly:
+
+- average RTT: 155 ms
+- median: 155 ms
+- p95: 177 ms
+- max: 211 ms
+
+More importantly, WebSocket runs over TCP, so packet loss can create head-of-line blocking that realtime voice normally avoids with UDP.
+
+Cloudflare Realtime TURN is a candidate preferred transport because it supports TURN over UDP, TCP, and TLS (including TLS on port 443). Current Cloudflare documentation states a shared Realtime free tier of 1,000 GB/month before $0.05/GB egress. This is research/design only; TURN voice has not yet been implemented or quality-tested in MCflare.
+## 10. Cloudflare behavior and constraints
+
+Current official Cloudflare documentation relevant to MCflare:
+
+- Cloudflare Tunnel is outbound-only and available on all plans; no public origin listener is required.
+- Published TCP applications are documented as TCP streamed over WebSocket with client-side `cloudflared access tcp`; Cloudflare recommends Client-to-Tunnel for long-lived TCP.
+- Cloudflare Tunnel supports normal proxied WebSockets.
+- Cloudflare can restart edge servers during deployments, terminating active WebSockets.
+- Cloudflare recommends application keepalives for long-running WebSockets and documents idle connection closure when no traffic flows.
+- Stopping/replacing a `cloudflared` replica drops long-lived WebSocket/TCP flows; a new replica handles new connections rather than preserving the old stream.
+- HTTP origins receive original visitor identity in `CF-Connecting-IP` when Cloudflare proxying is trusted/configured normally.
+
+These facts are why MCflare uses heartbeat + ordinary reconnect in v1 instead of promising uninterrupted sessions.
+### No transparent resume in v1
+
+A deliberate failure test killed the Enhanced edge during a live game. Minecraft disconnected cleanly; restarting the edge restored the route for a normal subsequent connection.
+
+Transparent continuation would require logical session IDs, sequence numbers, acknowledgements, replay buffers, retention windows, and careful interaction with Minecraft's encrypted/compressed stream. That complexity is not justified by current evidence.
+
+v1 policy:
+
+```text
+Cloudflare/WSS path breaks
+ -> current Minecraft connection ends
+ -> route cache is invalidated on unexpected carrier failure
+ -> player reconnects
+ -> MCflare performs fresh discovery
+```
+
+Revisit session resume only if field data shows Cloudflare-induced disconnects are common enough to materially harm users.
+## 11. Proven experiments and measurements
+
+The core theory was first isolated from Minecraft mods: a standard WebSocket client sent an actual Minecraft 26.2 Status handshake through Cloudflare to a TCP origin and received a valid status response. The experiment was then repeated against an unmodified Mojang 26.2 server.
+
+A full client test then replaced the external bridge with MCflare's in-process Java carrier. With the old Modflared JAR and external Node bridge absent, the real server logged the test player joining through Cloudflare.
+
+Proven results include:
+
+| Test | Result |
+|---|---|
+| Real Minecraft Status over direct WSS -> Cloudflare -> TCP | PASS |
+| Full 26.2 login through Basic-style carrier | PASS |
+| Full 26.2 login through single-process Enhanced HTTP/WSS gateway | PASS |
+| No player `cloudflared` process/binary | PASS |
+| Normal direct Minecraft server with MCflare installed | PASS |
+| Java 8u504 core runtime against live Cloudflare endpoint | PASS |
+| `CF-Connecting-IP` and `CF-Ray` present at Enhanced gateway | PASS |
+| Test | Result |
+|---|---|
+| MCF1 `HELLO` capability negotiation | PASS |
+| MCF1 datagram round trip 1..8192 bytes | PASS |
+| Gateway max-connection rejection (257th after 256 held) | PASS, immediate HTTP 503 |
+| Gateway killed during active game | clean disconnect observed |
+| Hardened RFC6455 parser after security pass | live Cloudflare Status PASS |
+| Fail-closed routing refactor | build/tests PASS; full protected login PASS |
+| Ordinary direct regression after fail-closed refactor | discovery miss ~3 ms; full join PASS |
+
+Observed protected discovery on temporary Quick Tunnel has generally been around 0.9-1.3 seconds after startup/network variability. These are development measurements, not latency SLAs.
+
+The final full protected login after the fail-closed refactor again logged a normal player join on the real 26.2 test server.
+## 12. Player and admin UX target
+
+### Player
+
+Normal target flow:
+
+```text
+install one MCflare-compatible mod artifact
+ -> launch Minecraft normally
+ -> add play.example.com
+ -> Join Server
+```
+
+There should be no Cloudflare account, WARP enrollment, `cloudflared` download, command-line proxy, localhost address, TXT token, or per-server configuration on the player machine.
+
+MCflare remains dormant for ordinary servers after discovery classifies them as direct.
+### Admin — Basic
+
+```yaml
+ingress:
+  - hostname: play.example.com
+    service: tcp://127.0.0.1:25565
+  - service: http_status:404
+```
+
+No server MCflare component is required.
+
+### Admin — Enhanced
+
+Run one gateway locally/private and configure the Tunnel hostname to its HTTP listener:
+
+```yaml
+ingress:
+  - hostname: play.example.com
+    service: http://127.0.0.1:25577
+  - service: http_status:404
+```
+
+Example gateway services are server-side declarations such as `voicechat=udp://127.0.0.1:24454`. The public hostname remains the same.
+## 13. Designs deliberately rejected or deferred
+
+### TXT-based discovery
+
+Rejected as unnecessary admin configuration. Active Minecraft-over-WSS probing already identifies compatible endpoints without another DNS record.
+
+### Bundling/downloading player-side `cloudflared`
+
+Used only in the earliest Modflared baseline to prove Cloudflare TCP transport. Removed from the product direction after the dependency-free Java carrier successfully completed real Minecraft sessions.
+
+### IP-range/CNAME heuristics
+
+Rejected as brittle. Being on a Cloudflare IP does not prove a hostname is an MCflare Minecraft endpoint.
+
+### One WebSocket carrying Minecraft and voice together
+
+Rejected. Realtime side services should not queue behind large ordered Minecraft traffic. Enhanced mode uses independent logical connections/services.
+### Generic OS packet interception
+
+Rejected as the primary compatibility mechanism. It would add platform-specific drivers/permissions and obscure which application owns a side channel. Prefer explicit mod APIs and gateway services.
+
+### Direct Minecraft Netty WebSocket replacement
+
+Deferred. The current in-process loopback carrier is simple, portable, and proven. Removing the local socket would increase hook complexity across Minecraft versions for little demonstrated benefit.
+
+### Transparent stream resume/replay
+
+Deferred for v1 because it greatly increases protocol state and correctness risk. Normal reconnect is currently the intended recovery behavior.
+
+### WSS as guaranteed primary voice transport
+
+Rejected. It works as a fallback, but TCP head-of-line blocking makes native realtime UDP/TURN worth testing before choosing a preferred voice transport.
+## 14. Code-quality rules
+
+MCflare should stay understandable enough to audit without reconstructing a networking framework.
+
+- Prefer one obvious implementation over parallel abstractions.
+- Core protocol constants live in one place (`GatewayProtocol`).
+- Loader adapters must not reimplement TLS/WebSocket/discovery.
+- Enhanced mode is one gateway process, not a chain of local proxies.
+- No unused optional-mod dependencies in the transport baseline.
+- No long-lived child process on player machines.
+- Avoid large queues; current stream writes apply natural blocking/backpressure.
+- Treat input size/time/resource limits as part of protocol correctness.
+- Keep experimental features behind separate commits/gates.
+- Do not claim a version/loader/mod integration until it has a real connection test.
+
+A local duplicate-window scan across the active Java files found no cross-file 8-line copy/paste clusters during the 2026-08-30 hardening pass.
+## 15. Build and CI baseline
+
+The hardened transport baseline must pass:
+
+```bash
+./gradlew --no-daemon clean build
+```
+
+`core` and `gateway` target Java 8. The current Fabric 26.2 adapter targets the Java runtime required by that Minecraft release.
+
+The pushed checkpoint before this hardening pass (`de01b66`) passed GitHub Actions on Ubuntu. Local hardening builds also pass; the hardening/docs changes must be pushed only after the final regression suite is clean.
+
+Known build note: Gradle currently emits Java-8 source/target deprecation warnings under the modern build JDK and a general future Gradle-10 compatibility warning. No project-owned Gradle deprecation was identified during the pass; do not add workaround complexity without locating a concrete project source.
+## 16. Remaining gates, in priority order
+
+1. Finish/push the current hardening + documentation checkpoint.
+2. Add an automated routing test that deliberately forces protected-route setup failure and proves no direct target is selected; keep the test seam minimal rather than adding a production abstraction solely for testing.
+3. Test a named production-style Cloudflare Tunnel, not only Quick Tunnels.
+4. Run longer multi-client sessions and connection churn tests.
+5. Implement Simple Voice Chat as a separate optional adapter using its official API.
+6. Compare WSS datagram voice with TURN/UDP under realistic latency/loss/jitter.
+7. Prove the architecture on Forge 1.12.2, then expand loader/version adapters.
+8. Test proxy stacks such as Velocity/Paper where handshake/SRV behavior differs.
+9. Design trusted source-IP integration only after the gateway deployment model is fixed.
+10. Build release packaging only after compatibility gates are real.
+
+Production origin port 25565 should remain closed/publicly unreachable throughout testing.
+## 17. Reference sources checked
+
+Cloudflare (current docs checked 2026-08-30):
+
+- Tunnel overview: https://developers.cloudflare.com/tunnel/
+- Published application protocols: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/protocols/
+- Tunnel routing: https://developers.cloudflare.com/tunnel/routing/
+- WebSockets behavior/keepalive/restarts: https://developers.cloudflare.com/network/websockets/
+- Tunnel config/replica connection behavior: https://developers.cloudflare.com/tunnel/advanced/local-management/configuration-file/
+- Original visitor IP headers: https://developers.cloudflare.com/support/troubleshooting/restoring-visitor-ips/restoring-original-visitor-ips/
+- Realtime TURN: https://developers.cloudflare.com/realtime/turn/
+- Realtime TURN FAQ/pricing: https://developers.cloudflare.com/realtime/turn/faq/
+
+Simple Voice Chat 26.2 source/API reviewed locally from https://github.com/henkelmax/simple-voice-chat/tree/26.2, including `ClientVoicechatSocket` and `ClientVoicechatInitializationEvent#setSocketImplementation`.
+
+MCflare retains the MIT attribution required for code derived from Modflared; see `NOTICE.md`.

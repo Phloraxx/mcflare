@@ -4,7 +4,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -39,7 +38,7 @@ public final class LoopbackCarrier implements Closeable {
 
     public static LoopbackCarrier start(String host, String path, ErrorHandler errorHandler) throws IOException {
         ServerSocket listener = new ServerSocket();
-        listener.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+        listener.bind(new InetSocketAddress("127.0.0.1", 0));
         LoopbackCarrier carrier = new LoopbackCarrier(host, path, listener, errorHandler);
         carrier.startDaemon("mcflare-accept", carrier::acceptLoop);
         return carrier;
@@ -68,6 +67,7 @@ public final class LoopbackCarrier implements Closeable {
 
     private void bridge(final Socket local) {
         Rfc6455Client ws = null;
+        final AtomicBoolean sessionClosing = new AtomicBoolean(false);
         try {
             ws = Rfc6455Client.connect(host, 443, path, 4000, 0);
             final Rfc6455Client activeWs = ws;
@@ -85,7 +85,7 @@ public final class LoopbackCarrier implements Closeable {
                             Thread.currentThread().interrupt();
                             return;
                         } catch (IOException e) {
-                            if (!closed.get()) report(e);
+                            if (!closed.get() && sessionClosing.compareAndSet(false, true)) report(e);
                             closeQuietly(local);
                             closeQuietly(activeWs);
                             return;
@@ -103,7 +103,7 @@ public final class LoopbackCarrier implements Closeable {
                             localOut.flush();
                         }
                     } catch (IOException e) {
-                        if (!closed.get()) report(e);
+                        if (!closed.get() && sessionClosing.compareAndSet(false, true)) report(e);
                     } finally {
                         closeQuietly(local);
                         closeQuietly(activeWs);
@@ -117,12 +117,13 @@ public final class LoopbackCarrier implements Closeable {
             while (!closed.get() && (read = localIn.read(buffer)) >= 0) {
                 if (read > 0) activeWs.sendBinary(buffer, 0, read);
             }
+            sessionClosing.set(true);
             closeQuietly(activeWs);
             closeQuietly(local);
             heartbeat.interrupt();
             try { downlink.join(1000L); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         } catch (IOException e) {
-            if (!closed.get()) report(e);
+            if (!closed.get() && sessionClosing.compareAndSet(false, true)) report(e);
         } finally {
             closeQuietly(ws);
             closeQuietly(local);

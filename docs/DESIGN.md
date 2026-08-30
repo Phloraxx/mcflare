@@ -9,6 +9,7 @@
 5. Do not parse Minecraft play packets. MCflare carries bytes; Minecraft owns its protocol.
 6. Add adapters only for mods that open a separate network socket.
 7. Prefer a small recoverable failure over a complex transparent-resume protocol.
+8. Once a server is positively identified as MCflare, transport failure is fail-closed; never silently retry direct TCP.
 
 ## Components
 
@@ -35,6 +36,8 @@ The logical hostname the player entered is kept separate from Minecraft's DNS/SR
 
 The probe sends the current client's real Minecraft protocol version when the adapter can provide it. The core can fall back to an unknown version for loader-independent tooling.
 
+Routing has only two states: `DIRECT` and `MCFLARE`. A positive MCflare result requires a carrier; carrier setup/failure never means direct fallback.
+
 ## Enhanced protocol
 
 Every Enhanced side-service connection begins with:
@@ -46,6 +49,10 @@ MCF1 | version | opcode
 Supported v1 operations are `HELLO`, `OPEN_STREAM`, and `OPEN_DATAGRAM`. Service IDs are configured at the gateway; clients never select arbitrary backend addresses. This prevents MCflare from becoming an open proxy.
 
 Datagrams are length-framed because WebSocket frame boundaries are not application-record boundaries. The v1 maximum datagram is 8192 bytes.
+
+## Mode stability note
+
+Basic `tcp://` mode is experimentally proven with MCflare's dependency-free RFC6455 carrier, but Cloudflare officially documents this mode around `cloudflared access tcp`, not a stable third-party custom-client API. Enhanced HTTP/WSS uses Cloudflare's normal documented WebSocket proxy path and is the preferred long-term production direction.
 
 ## Known constraints
 
@@ -65,3 +72,6 @@ Datagrams are length-framed because WebSocket frame boundaries are not applicati
 - auto-editing DNS or requiring an MCflare TXT record
 
 These can be revisited only if measured user problems justify the complexity.
+
+
+For the full decision history, measurements, rejected alternatives, security boundary, and reference sources, see `PROJECT_KNOWLEDGE.md`.

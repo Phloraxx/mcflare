@@ -20,14 +20,21 @@ public abstract class ServerStatusPingerMixin {
     public Connection pingServer(InetSocketAddress address, EventLoopGroupHolder holder,
                                  LocalSampleLogger localSampleLogger, ServerData data) {
         ServerAddress logical = ServerAddress.parseString(data.ip);
-        var result = McflareClient.TUNNEL_MANAGER.handleConnect(
+        TunnelStatus status = McflareClient.TUNNEL_MANAGER.handleConnect(
                 logical.getHost(), logical.getPort(), address);
-        if (result.state() == TunnelStatus.State.USE) {
-            var connection = Connection.connectToServer(
-                    result.runningTunnel().access().tunnelAddress(), holder, localSampleLogger);
-            McflareClient.TUNNEL_MANAGER.prepareConnection(result, connection);
+        InetSocketAddress target = status.usesMcflare()
+                ? status.runningTunnel().access().tunnelAddress()
+                : address;
+
+        try {
+            Connection connection = Connection.connectToServer(target, holder, localSampleLogger);
+            McflareClient.TUNNEL_MANAGER.prepareConnection(status, connection);
             return connection;
+        } catch (RuntimeException | Error error) {
+            if (status.usesMcflare()) {
+                McflareClient.TUNNEL_MANAGER.closeTunnel(status.runningTunnel());
+            }
+            throw error;
         }
-        return Connection.connectToServer(address, holder, localSampleLogger);
     }
 }

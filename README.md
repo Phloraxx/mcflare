@@ -19,7 +19,7 @@ MCflare lets Minecraft clients reach origin-hidden servers through Cloudflare us
 | Cloudflare source-IP header at gateway | no | yes |
 | Player experience | identical | identical |
 
-Basic is the minimum setup. Enhanced is the recommended path when the server needs voice/side services, connection policy, or source-IP-aware gateway controls.
+Basic is the minimum setup and is experimentally compatible with Cloudflare TCP-over-WebSocket behavior. Enhanced uses the normal documented HTTP/WebSocket path and is the recommended production direction when the server needs voice/side services, connection policy, source-IP-aware gateway controls, or a more explicit protocol boundary.
 
 ## Basic setup
 
@@ -84,7 +84,7 @@ Simple Voice Chat is the first planned side-service adapter because its public A
 
 Core protocol tests run as part of `build`. CI performs the same clean build on every push and pull request.
 
-See `docs/DESIGN.md` and `docs/TEST_MATRIX.md` for the constraints and current proof gates.
+Start with `docs/PROJECT_KNOWLEDGE.md` for the canonical engineering record. `docs/DESIGN.md` is the concise architecture summary and `docs/TEST_MATRIX.md` tracks proof gates.
 
 ## Attribution
 

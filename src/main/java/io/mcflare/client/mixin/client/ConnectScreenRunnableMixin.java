@@ -20,13 +20,24 @@ public class ConnectScreenRunnableMixin {
     @Shadow @Final private ServerAddress val$hostAndPort;
 
     @Redirect(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;"))
-    private @NotNull ChannelFuture connect(@NotNull InetSocketAddress address, EventLoopGroupHolder holder, Connection connection) {
-        var status = McflareClient.TUNNEL_MANAGER.handleConnect(
+    private @NotNull ChannelFuture connect(@NotNull InetSocketAddress address,
+                                           EventLoopGroupHolder holder,
+                                           Connection connection) {
+        TunnelStatus status = McflareClient.TUNNEL_MANAGER.handleConnect(
                 val$hostAndPort.getHost(), val$hostAndPort.getPort(), address);
-        McflareClient.TUNNEL_MANAGER.prepareConnection(status, connection);
-        InetSocketAddress target = status.state() == TunnelStatus.State.USE
+        InetSocketAddress target = status.usesMcflare()
                 ? status.runningTunnel().access().tunnelAddress()
                 : address;
-        return Connection.connect(target, holder, connection);
+
+        try {
+            ChannelFuture future = Connection.connect(target, holder, connection);
+            McflareClient.TUNNEL_MANAGER.prepareConnection(status, connection);
+            return future;
+        } catch (RuntimeException | Error error) {
+            if (status.usesMcflare()) {
+                McflareClient.TUNNEL_MANAGER.closeTunnel(status.runningTunnel());
+            }
+            throw error;
+        }
     }
 }
