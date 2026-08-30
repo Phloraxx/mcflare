@@ -30,6 +30,9 @@
 | Datagram channel idle 5.5 s then round trip | PASS |
 | Quick Tunnel with blocked QUIC/7844 | external failure reproduced on baseline and current branch |
 | Quick Tunnel forced `--protocol http2` on same network | baseline + current branch full login PASS |
+| Named Tunnel Basic (`mcflare-test`) full 26.2 login | PASS on Oracle control route |
+| Named Tunnel Enhanced HTTP/WSS (`mcflare2-test`) full 26.2 login | PASS on Oracle; gateway saw Cloudflare source headers |
+| Named Tunnel Enhanced + Simple Voice Chat (`mcflare2-test`) | PASS; Minecraft join + SVC authentication + connection validation, UDP origin loopback-only |
 ## Measured observations
 
 - Protected discovery on temporary Quick Tunnels has commonly completed in roughly 0.9-1.3 seconds in recent client tests; this is not an SLA.

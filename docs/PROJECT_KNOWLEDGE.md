@@ -365,6 +365,8 @@ Proven results include:
 | Datagram service idle for 5.5 s then send/receive | PASS after setup/read-timeout split |
 | Baseline vs voice branch under blocked QUIC Quick Tunnel | both failed full stream; external connector issue isolated |
 | Quick Tunnel forced to HTTP/2 on same network | baseline and current branch full login PASS |
+| Named Cloudflare Tunnel Basic control (`mcflare-test.mulearnscet.in`) | Status + full 26.2 login PASS |
+| Named Cloudflare Tunnel Enhanced HTTP/WSS (`mcflare2-test.mulearnscet.in`) | Status + full 26.2 login PASS; gateway received Cloudflare source metadata |
 
 Observed protected discovery on healthy temporary Quick Tunnels has generally been around 0.9-1.5 seconds after startup/network variability. These are development measurements, not latency SLAs. Quick Tunnel connector health must be checked separately because Status success alone did not guarantee a healthy long-lived route during the QUIC/7844 incident.
 
@@ -499,3 +501,45 @@ Cloudflare (current docs checked 2026-08-30):
 Simple Voice Chat 26.2 source/API reviewed locally from https://github.com/henkelmax/simple-voice-chat/tree/26.2, including `ClientVoicechatSocket` and `ClientVoicechatInitializationEvent#setSocketImplementation`.
 
 MCflare retains the MIT attribution required for code derived from Modflared; see `NOTICE.md`.
+
+## 18. Architecture re-evaluation — 2026-08-30
+
+The preferred v1 architecture is now **Enhanced HTTP/WebSocket as the production default**, with Basic `tcp://` retained as a gatewayless compatibility/minimal mode. Cloudflare documents normal HTTP/WebSocket published applications as clientless, while published raw TCP is documented around client-side `cloudflared`; therefore new MCflare protocol features should be designed around Enhanced HTTP/WSS, not the Basic carrier.
+
+### Recommended protocol simplification (next refactor; not implemented yet)
+
+Enhanced mode should select services by the WebSocket HTTP path instead of multiplexing them after upgrade with `MCF1` magic/opcodes and a separate `HELLO` capability request:
+
+```text
+/.well-known/mcflare                         -> Minecraft byte stream
+/.well-known/mcflare/v1/datagram/voicechat  -> Simple Voice Chat datagrams
+/.well-known/mcflare/v1/stream/<service>     -> reserve only when a real TCP-side-service adapter exists
+```
+
+For a datagram path, the Enhanced gateway validates the configured service before accepting/using the channel and sends a tiny server-first acknowledgement. The client sends no application bytes before that acknowledgement. This is important for Basic mode: the current named Basic Tunnel was experimentally tested with the proposed voice path; its WebSocket upgrade succeeded but remained byte-silent, so a side-service attempt can timeout/fail closed without injecting control bytes into the Minecraft origin.
+
+This makes `HELLO`/capability JSON unnecessary for current SVC behavior. The SVC adapter already knows that it needs service `voicechat` of type datagram, so it should directly attempt that service. The refactor can remove `GatewayControlClient`, capability parsing/futures, `MCF1` magic/opcode dispatch, and the gateway's first-four-byte Minecraft-vs-control sniff. Keep explicit `u16 length + payload` datagram framing: WebSocket frame boundaries are not application record boundaries.
+
+### Shared-version simplification
+
+Before adding Forge/NeoForge/legacy adapters, move hostname normalization, cache TTLs, WSS-vs-direct discovery policy, and direct-reachability probing out of the Fabric `TunnelManager` into a dependency-free Java-8 core resolver. Loader adapters should supply only the logical hostname/port, actual Minecraft protocol version, and Minecraft-resolved/SRV address. DNS/SRV resolution remains owned by Minecraft.
+
+The current `RunningTunnel` and `TunnelStatus` wrappers can likely collapse around `LoopbackCarrier`: the carrier already owns the protected hostname and local listener. A connection should own and close its carrier directly; a central list of every live carrier is unnecessary if connection failure/disconnect paths close it and executor threads are daemon threads. The fail-closed invariant must remain explicit: a resolver result of MCflare followed by carrier-creation failure is an error, never a direct fallback.
+
+### Complexity deliberately retained
+
+The localhost `LoopbackCarrier` remains intentional. Replacing Minecraft's Netty channel directly would save one loopback socket but multiply loader/version-specific hooks and make universal support more fragile. `WebSocketByteStream` also remains justified for side-channel framing because RFC 6455 intermediaries may fragment/coalesce frames. Client/server RFC6455 implementations should remain separately auditable unless a very small pure helper can be shared without obscuring opposite masking/trust rules.
+
+The generic `OPEN_STREAM` path is currently speculative because no real adapter uses it. Do not keep an in-band stream opcode merely for future possibility; reserve a URL convention and add the implementation when a real TCP-side-service integration needs it.
+
+### Alternatives reviewed and deferred
+
+Workers VPC can now let a Worker open raw TCP to a private service through a VPC Network binding, but it is beta and adds Worker/VPC deployment, quotas, and another Cloudflare product boundary while not solving UDP voice. It is not simpler than the small local Enhanced gateway for v1. Cloudflare Realtime TURN remains a promising future voice transport (native UDP/TCP/TLS relay), but adding TURN allocation/credentials before two-client WSS audio testing would be premature. Transparent Minecraft session replay/resume and direct Netty/WebSocket replacement remain deferred.
+
+### Operational/security notes added by this review
+
+Enhanced gateway paths can use Cloudflare WAF/rate-limiting on the initial WebSocket upgrade, but established WebSocket payloads are not inspected by WAF. Do not place browser-interactive Access/Managed Challenge behavior in front of MCflare paths. Keep gateway frame/connection limits. Make the current 256-connection ceiling configurable because Enhanced SVC commonly consumes two long-lived WebSockets per player (Minecraft + voice), plus short-lived discovery/status connections.
+
+Trust `CF-Connecting-IP` only when the gateway is private behind Cloudflare. It does not automatically become Minecraft's socket remote address; IP-ban/proxy integrations remain separate future work. Production should keep `cloudflared` and the gateway on loopback or the same private container network where possible. Do not enable HTTP/2-to-origin for the current hand-written HTTP/1.1 WebSocket gateway.
+
+For optional SVC integration, keep one MCflare artifact rather than a second addon JAR. The current no-SVC runtime test proves the Fabric `voicechat` entrypoint remains dormant when SVC is absent. Add metadata/version guards for incompatible SVC API versions rather than reflection or a second install step.
