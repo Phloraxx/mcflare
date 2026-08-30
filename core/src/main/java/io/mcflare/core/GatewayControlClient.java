@@ -71,5 +71,14 @@ public final class GatewayControlClient {
         public String getCapabilitiesJson() { return capabilitiesJson; }
         public long getLatencyMillis() { return latencyMillis; }
         public String getReason() { return reason; }
+
+        public boolean hasService(String serviceId, String kind) {
+            if (!supported || capabilitiesJson == null
+                    || !GatewayProtocol.isValidServiceId(serviceId)) return false;
+            if (!"stream".equals(kind) && !"datagram".equals(kind)) return false;
+            String marker = "\"id\":\"" + serviceId
+                    + "\",\"kind\":\"" + kind + "\"";
+            return capabilitiesJson.contains(marker);
+        }
     }
 }

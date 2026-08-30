@@ -52,6 +52,10 @@ public final class WebSocketByteStream implements Closeable {
         return ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
     }
 
+    public boolean isClosed() {
+        return webSocket.isClosed();
+    }
+
     @Override
     public void close() throws IOException {
         webSocket.close();

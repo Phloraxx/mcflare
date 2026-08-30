@@ -34,6 +34,9 @@ public final class GatewayDatagramClient implements Closeable {
             if (!json.contains("\"ok\":true")) {
                 throw new IOException("gateway rejected datagram service: " + json);
             }
+            // The timeout protects connection/setup only. Once opened, datagram reads
+            // intentionally block until the service produces a packet or the socket closes.
+            ws.setReadTimeout(0);
             return new GatewayDatagramClient(stream);
         } catch (IOException | RuntimeException e) {
             try { stream.close(); } catch (IOException ignored) {}
@@ -58,6 +61,10 @@ public final class GatewayDatagramClient implements Closeable {
             throw new IOException("invalid datagram length: " + length);
         }
         return stream.readExact(length);
+    }
+
+    public boolean isClosed() {
+        return stream.isClosed();
     }
 
     @Override

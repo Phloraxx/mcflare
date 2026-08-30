@@ -266,22 +266,28 @@ Special handling is needed only when a mod/service opens another network socket:
 Unknown arbitrary mod protocols are not automatically guessed. They either already ride Minecraft's connection or need an explicit adapter/service declaration.
 ### Simple Voice Chat
 
-Simple Voice Chat uses a separate UDP path (default port 24454), so it does not automatically ride Minecraft TCP. Its current 26.2 project supports Fabric, Forge, NeoForge, Quilt, Paper/Bukkit-family servers, and common proxies, and exposes a public voice-chat API.
+Simple Voice Chat uses a separate UDP path (default port 24454), so it does not automatically ride Minecraft TCP. Its 26.2 project exposes an official `ClientVoicechatSocket` replacement API, which MCflare now uses instead of packet interception or SVC mixins.
 
-The integration direction is an optional adapter using its official socket-replacement/plugin API, not packet interception. MCflare should remain fully functional when Simple Voice Chat is absent.
-
-Planned fallback path:
+Proven Enhanced path:
 
 ```text
 Simple Voice Chat client socket
- -> MCflare datagram client
+ -> `McflareVoicechatSocket`
+ -> MCF1 `OPEN_DATAGRAM voicechat`
  -> WSS
  -> Cloudflare
  -> MCflare Gateway
  -> UDP 127.0.0.1:24454
+ -> Simple Voice Chat server
 ```
 
-The dependency/API should be added only in the dedicated voice adapter commit; it is intentionally absent from the hardened transport baseline.
+A real SVC 2.6.22+26.2 client/server test completed authentication and connection validation through MCflare. The server logged the player as successfully connected to voice chat while the public UDP endpoint remained unnecessary. SVC's generated `voice_host=` was left blank; because Minecraft itself connects to MCflare's loopback carrier, SVC sees `127.0.0.1:24454` rather than the protected origin.
+
+SVC's default keepalive interval is 1000 ms. A diagnostic relay confirmed the keepalive exchange continued through MCflare, so the adapter does not add a redundant voice heartbeat thread. `GatewayDatagramClient` uses a bounded timeout only for WSS/service setup, then switches established datagram reads to blocking mode. A 5.5-second idle test followed by a successful datagram round trip verified this lifecycle.
+
+Voice transport selection is asynchronous so SVC initialization does not block Minecraft's render thread. For an ordinary non-MCflare server, MCflare does not install the custom voice socket and SVC continues to use its stock UDP implementation; this was verified with a real SVC authentication/connection-check test.
+
+For a server already classified as MCflare, voice is fail-closed: the gateway must positively advertise a `voicechat` datagram service. If it does not, Minecraft remains connected but SVC voice disconnects rather than falling back to a directly advertised UDP endpoint. This prevents a side-channel/origin leak from undoing the main protected route.
 ### Voice transport choice
 
 WSS datagrams are functionally proven but should be treated as the compatibility fallback, not automatically the preferred realtime path. A 60-packet test using 200-byte voice-like request/reply payloads through a temporary Quick Tunnel measured roughly:
@@ -305,6 +311,8 @@ Current official Cloudflare documentation relevant to MCflare:
 - Cloudflare recommends application keepalives for long-running WebSockets and documents idle connection closure when no traffic flows.
 - Stopping/replacing a `cloudflared` replica drops long-lived WebSocket/TCP flows; a new replica handles new connections rather than preserving the old stream.
 - HTTP origins receive original visitor identity in `CF-Connecting-IP` when Cloudflare proxying is trusted/configured normally.
+
+Development-environment finding (2026-08-30): the Mac test network began blocking Cloudflare Tunnel QUIC on port 7844. `cloudflared` pre-checks reported QUIC failure and one HTTP/2 region unreachable. This produced misleading symptoms where an old Quick Tunnel could still answer Status but full game streams timed out, while a newly created Quick Tunnel never connected. Re-running the disposable connector with `--protocol http2` restored Status and full Minecraft login for both baseline `a7e6a74` and the current voice branch. Treat Quick Tunnel transport health as an external test variable; do not diagnose MCflare regressions from Status-only success. Production should use a named Tunnel and monitor connector health.
 
 These facts are why MCflare uses heartbeat + ordinary reconnect in v1 instead of promising uninterrupted sessions.
 ### No transparent resume in v1
@@ -350,8 +358,14 @@ Proven results include:
 | Hardened RFC6455 parser after security pass | live Cloudflare Status PASS |
 | Fail-closed routing refactor | build/tests PASS; full protected login PASS |
 | Ordinary direct regression after fail-closed refactor | discovery miss ~3 ms; full join PASS |
+| Simple Voice Chat 2.6.22+26.2 over Enhanced `voicechat` datagram service | authentication + connection validation PASS |
+| Protected MCflare server with no `voicechat` service | Minecraft stays joined; voice fails closed; no normal UDP fallback |
+| Ordinary non-MCflare SVC server with MCflare installed | stock UDP authentication + validation PASS |
+| Datagram service idle for 5.5 s then send/receive | PASS after setup/read-timeout split |
+| Baseline vs voice branch under blocked QUIC Quick Tunnel | both failed full stream; external connector issue isolated |
+| Quick Tunnel forced to HTTP/2 on same network | baseline and current branch full login PASS |
 
-Observed protected discovery on temporary Quick Tunnel has generally been around 0.9-1.3 seconds after startup/network variability. These are development measurements, not latency SLAs.
+Observed protected discovery on healthy temporary Quick Tunnels has generally been around 0.9-1.5 seconds after startup/network variability. These are development measurements, not latency SLAs. Quick Tunnel connector health must be checked separately because Status success alone did not guarantee a healthy long-lived route during the QUIC/7844 incident.
 
 The final full protected login after the fail-closed refactor again logged a normal player join on the real 26.2 test server.
 ## 12. Player and admin UX target
@@ -456,12 +470,12 @@ The pushed checkpoint before this hardening pass (`de01b66`) passed GitHub Actio
 Known build note: Gradle currently emits Java-8 source/target deprecation warnings under the modern build JDK and a general future Gradle-10 compatibility warning. No project-owned Gradle deprecation was identified during the pass; do not add workaround complexity without locating a concrete project source.
 ## 16. Remaining gates, in priority order
 
-1. Finish/push the current hardening + documentation checkpoint.
+1. Commit/push the isolated Simple Voice Chat adapter after its final clean build/tests.
 2. Add an automated routing test that deliberately forces protected-route setup failure and proves no direct target is selected; keep the test seam minimal rather than adding a production abstraction solely for testing.
-3. Test a named production-style Cloudflare Tunnel, not only Quick Tunnels.
+3. Test a named production-style Cloudflare Tunnel, not only Quick Tunnels, and verify connector behavior under both QUIC and HTTP/2 transport.
 4. Run longer multi-client sessions and connection churn tests.
-5. Implement Simple Voice Chat as a separate optional adapter using its official API.
-6. Compare WSS datagram voice with TURN/UDP under realistic latency/loss/jitter.
+5. Measure real two-client SVC audio latency/jitter/loss over WSS; compare with direct UDP.
+6. Compare WSS datagram voice with TURN/UDP under realistic latency/loss/jitter before choosing a preferred realtime transport.
 7. Prove the architecture on Forge 1.12.2, then expand loader/version adapters.
 8. Test proxy stacks such as Velocity/Paper where handshake/SRV behavior differs.
 9. Design trusted source-IP integration only after the gateway deployment model is fixed.

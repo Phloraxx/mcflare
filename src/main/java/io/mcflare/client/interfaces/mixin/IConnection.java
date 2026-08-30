@@ -6,4 +6,6 @@ public interface IConnection {
 
     void setRunningTunnel(RunningTunnel runningTunnel);
 
+    RunningTunnel getRunningTunnel();
+
 }

@@ -31,5 +31,10 @@ public abstract class ConnectionMixin implements IConnection {
     public void connection$setRunningTunnel(RunningTunnel runningTunnel) {
         this.mcflare$runningTunnel = runningTunnel;
     }
+
+    @Intrinsic
+    public RunningTunnel connection$getRunningTunnel() {
+        return this.mcflare$runningTunnel;
+    }
     
 }

@@ -23,12 +23,19 @@
 | Enhanced gateway killed during a game | clean disconnect observed |
 | Edge restarted then route reused | PASS at Status layer |
 | Fail-closed routing state refactor | build/tests PASS; protected full login PASS |
+| Simple Voice Chat 2.6.22+26.2 over Enhanced `voicechat` datagram | PASS; auth + connection check acknowledged |
+| Protected MCflare server without `voicechat` service | PASS; Minecraft remains joined, voice fails closed |
+| Ordinary non-MCflare SVC server | PASS; stock UDP auth + connection check |
+| Datagram channel idle 5.5 s then round trip | PASS |
+| Quick Tunnel with blocked QUIC/7844 | external failure reproduced on baseline and current branch |
+| Quick Tunnel forced `--protocol http2` on same network | baseline + current branch full login PASS |
 ## Measured observations
 
 - Protected discovery on temporary Quick Tunnels has commonly completed in roughly 0.9-1.3 seconds in recent client tests; this is not an SLA.
 - WSS datagram benchmark: 60 x 200-byte request/reply packets averaged ~155 ms RTT, median ~155 ms, p95 ~177 ms, max ~211 ms.
 - The latest ordinary direct regression used `127.0.0.1.nip.io:25575`, classified it non-MCflare in ~3 ms, and completed a normal full login.
 - The post-hardening protected regression completed discovery, created an in-process carrier, and the real 26.2 test server logged the player joining.
+- During the 2026-08-30 Mac test, Cloudflare connector pre-checks showed QUIC/7844 blocked. An old Quick Tunnel could answer Status while full streams timed out; a fresh default Quick Tunnel could not connect. Forcing `cloudflared --protocol http2` restored full login. This was reproduced with both baseline `a7e6a74` and the current voice branch, proving it was external to the voice changes.
 
 ## Automated tests
 
@@ -60,7 +67,7 @@ The Java-8 transport runtime is proven independently. Loader/version-specific ho
 2. Repeat the complete suite against a named production-style Tunnel instead of only disposable Quick Tunnels.
 3. Multi-client concurrency and connection-churn testing.
 4. Longer sessions under realistic gameplay/network changes.
-5. Simple Voice Chat real client/server adapter over MCF1 datagrams.
+5. Two-client real audio quality test for Simple Voice Chat over MCF1 datagrams.
 6. TURN/UDP voice experiment and loss/jitter comparison against WSS fallback.
 7. Velocity/Paper/proxy compatibility tests.
 8. Forge 1.12.2 legacy adapter proof.
@@ -71,4 +78,5 @@ The Java-8 transport runtime is proven independently. Loader/version-specific ho
 - Separate TCP services use `OPEN_STREAM`.
 - Separate UDP services use `OPEN_DATAGRAM` or a future realtime transport.
 - Prefer official mod APIs over mixins/global packet interception.
-- Simple Voice Chat is the first side-service target; its API dependency is intentionally not part of the hardened transport baseline.
+- Simple Voice Chat is now the first proven side-service adapter on Fabric 26.2. It uses the official socket API and is compile-only/optional.
+- On an MCflare-protected server, SVC is fail-closed unless Enhanced advertises `voicechat`; ordinary non-MCflare servers remain on stock UDP.

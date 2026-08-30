@@ -74,7 +74,7 @@ Most mods need no MCflare integration because their packets already travel insid
 - root module — current Fabric 26.2 connection hooks.
 - future loader adapters — thin hooks that reuse `core/`; they should not reimplement transport.
 
-Simple Voice Chat is the first planned side-service adapter because its public API supports replacing the client voice socket. WSS datagrams are the compatibility fallback; native realtime UDP/TURN remains the preferred future voice path if latency/loss testing justifies it.
+Simple Voice Chat 2.6.22+26.2 is the first proven side-service adapter. MCflare uses SVC's official client-socket API: ordinary servers keep stock UDP, while an MCflare-protected server uses the Enhanced `voicechat` datagram service and fails closed if that service is absent. WSS datagrams are the proven compatibility path; native realtime UDP/TURN remains a future candidate pending real loss/jitter comparisons.
 
 ## Build
 

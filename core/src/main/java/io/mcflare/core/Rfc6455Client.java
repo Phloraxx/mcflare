@@ -174,6 +174,11 @@ public final class Rfc6455Client implements Closeable {
         sendFrame(0xA, payload, 0, payload.length);
     }
 
+    public void setReadTimeout(int timeoutMs) throws java.net.SocketException {
+        if (timeoutMs < 0) throw new IllegalArgumentException("timeoutMs");
+        socket.setSoTimeout(timeoutMs);
+    }
+
     public boolean isClosed() {
         return closed || socket.isClosed();
     }
