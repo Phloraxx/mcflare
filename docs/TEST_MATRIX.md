@@ -24,6 +24,7 @@
 | Edge restarted then route reused | PASS at Status layer |
 | Fail-closed routing state refactor | build/tests PASS; protected full login PASS |
 | Simple Voice Chat 2.6.22+26.2 over Enhanced `voicechat` datagram | PASS; auth + connection check acknowledged |
+| Voice-enabled MCflare artifact with Simple Voice Chat absent | PASS; no hard runtime dependency, protected full login succeeds |
 | Protected MCflare server without `voicechat` service | PASS; Minecraft remains joined, voice fails closed |
 | Ordinary non-MCflare SVC server | PASS; stock UDP auth + connection check |
 | Datagram channel idle 5.5 s then round trip | PASS |

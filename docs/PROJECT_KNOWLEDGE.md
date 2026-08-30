@@ -359,6 +359,7 @@ Proven results include:
 | Fail-closed routing refactor | build/tests PASS; full protected login PASS |
 | Ordinary direct regression after fail-closed refactor | discovery miss ~3 ms; full join PASS |
 | Simple Voice Chat 2.6.22+26.2 over Enhanced `voicechat` datagram service | authentication + connection validation PASS |
+| Voice-enabled MCflare artifact with Simple Voice Chat not installed | PASS; no hard runtime dependency, protected full login succeeds |
 | Protected MCflare server with no `voicechat` service | Minecraft stays joined; voice fails closed; no normal UDP fallback |
 | Ordinary non-MCflare SVC server with MCflare installed | stock UDP authentication + validation PASS |
 | Datagram service idle for 5.5 s then send/receive | PASS after setup/read-timeout split |
