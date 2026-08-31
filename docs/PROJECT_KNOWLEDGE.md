@@ -545,3 +545,19 @@ Enhanced gateway paths can use Cloudflare WAF/rate-limiting on the initial WebSo
 Trust `CF-Connecting-IP` only when the gateway is private behind Cloudflare. It does not automatically become Minecraft's socket remote address; IP-ban/proxy integrations remain separate future work. Production should keep `cloudflared` and the gateway on loopback or the same private container network where possible. Do not enable HTTP/2-to-origin for the current hand-written HTTP/1.1 WebSocket gateway.
 
 For optional SVC integration, keep one MCflare artifact rather than a second addon JAR. The current no-SVC runtime test proves the Fabric `voicechat` entrypoint remains dormant when SVC is absent. Add metadata/version guards for incompatible SVC API versions rather than reflection or a second install step.
+
+## 19. Scope simplification — 2026-08-31
+
+This decision supersedes the earlier side-service/voice architecture for the product: **MCflare transports only Minecraft's own Java TCP connection.** Any protocol or mod traffic already inside the Minecraft connection remains transparently supported. A mod that opens a separate TCP/UDP socket is outside MCflare's scope and uses/exposes its own endpoint.
+
+Consequences implemented on `feature/orange-minecraft-only`:
+
+- Simple Voice Chat MCflare adapter removed; SVC uses native UDP independently.
+- `GatewayControlClient`, `GatewayDatagramClient`, `GatewayProtocol`, `WebSocketByteStream`, MCF1 HELLO/OPEN_STREAM/OPEN_DATAGRAM, capability JSON, generic UDP/TCP side services, and their tests removed.
+- SVC Maven/API dependency and Fabric `voicechat` entrypoint removed.
+- Enhanced gateway reduced to one responsibility: `/.well-known/mcflare` WebSocket bytes <-> one configured Minecraft TCP backend.
+- Gateway connection limit is configurable through the third CLI argument, default 256.
+
+Historical SVC-over-MCflare and datagram experiments remain useful evidence but are retired from the intended product. They proved separate-socket proxying is possible; the new scope explicitly chooses not to carry that complexity.
+
+The preferred deployment is normal Cloudflare orange-cloud HTTP/WebSocket proxying. Cloudflare Tunnel remains optional only as an origin-reachability mechanism for CGNAT/no-public-ingress cases; it reaches the same Minecraft-only HTTP/WebSocket gateway. The next latency optimization is prepared-WebSocket discovery: identify MCflare via an explicit WebSocket subprotocol and reuse the successful discovery socket as the actual Minecraft carrier.

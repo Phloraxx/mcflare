@@ -14,8 +14,7 @@
   "icon": "assets/mcflare/icon.png",
   "environment": "client",
   "entrypoints": {
-    "client": ["io.mcflare.client.McflareClient"],
-    "voicechat": ["io.mcflare.client.voice.McflareVoicechatPlugin"]
+    "client": ["io.mcflare.client.McflareClient"]
   },
   "mixins": ["mcflare.mixins.json"],
   "depends": {

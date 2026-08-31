@@ -1,82 +1,57 @@
 # MCflare
 
-MCflare lets Minecraft clients reach origin-hidden servers through Cloudflare using one client mod and a normal server hostname.
+MCflare carries the normal Minecraft Java TCP connection over a standard WebSocket so an origin-hidden server can sit behind normal Cloudflare orange-cloud HTTP/WebSocket proxying. Cloudflare Tunnel is an optional origin transport for servers that cannot expose HTTPS.
 
-**Player goal:** install MCflare once, enter `play.example.com`, join normally.
+**Player:** install MCflare, enter `play.example.com`, join normally.
 
-**Admin goal:** publish one proxied hostname. The preferred next deployment is normal Cloudflare orange-cloud HTTP/WebSocket proxying; Cloudflare Tunnel remains optional for CGNAT/no-public-ingress servers. No TXT discovery record, player-side `cloudflared`, WARP, localhost command, or custom launcher is required.
+**Admin:** run one small MCflare gateway in front of Minecraft, then publish the gateway through orange-cloud proxying (preferred) or Tunnel (optional). No TXT discovery record, player-side `cloudflared`, WARP, custom launcher, or special server address is required.
 
-> Status: experimental. Fabric 26.2 and the current Tunnel/Enhanced implementation are proven end-to-end. The Orange-first low-latency architecture is the next refactor and is documented in `docs/LOW_LATENCY_ARCHITECTURE.md`; it is not yet claimed as benchmarked or production-proven.
+> Status: experimental. Fabric 26.2 is proven end-to-end. The transport core and gateway compile to Java 8. Orange-first latency benchmarking is the next deployment gate.
 
-## Current proven modes
+## Scope
 
-The table below describes the current implementation. The planned Orange-first refactor converges both deployment methods on the same HTTP/WebSocket gateway and removes the special raw-Tunnel Basic protocol.
+MCflare transports **only Minecraft's own connection**.
 
-| | Basic | Enhanced |
-|---|---|---|
-| Tunnel origin | `tcp://minecraft:25565` | `http://mcflare:25577` |
-| Server gateway | none | one MCflare process |
-| Minecraft | yes | yes |
-| Separate TCP/UDP mod services | no | yes |
-| Cloudflare source-IP header at gateway | no | yes |
-| Player experience | identical | identical |
+- Vanilla Minecraft traffic works.
+- Mod/plugin packets carried inside Minecraft's connection work transparently.
+- Mods that open separate TCP/UDP sockets use their own networking and are outside MCflare's scope.
+- Simple Voice Chat therefore uses its normal separate UDP port; MCflare does not proxy it.
 
-Basic is the minimum setup and is experimentally compatible with Cloudflare TCP-over-WebSocket behavior. Enhanced uses the normal documented HTTP/WebSocket path and is the recommended production direction when the server needs voice/side services, connection policy, source-IP-aware gateway controls, or a more explicit protocol boundary.
+This boundary keeps MCflare small and avoids turning it into a generic VPN or multiplexer.
 
-## Basic setup
-
-```yaml
-ingress:
-  - hostname: play.example.com
-    service: tcp://127.0.0.1:25565
-  - service: http_status:404
-```
-
-The client opens `wss://play.example.com/.well-known/mcflare` and sends a real Minecraft status handshake. If a valid Minecraft status response comes back, MCflare uses WSS for the game stream. Otherwise Minecraft uses its normal TCP/SRV route.
-
-No special DNS metadata is required.
-
-## Enhanced setup
-
-Run the gateway locally:
-
-```bash
-java -jar mcflare-gateway.jar \
-  127.0.0.1:25577 \
-  127.0.0.1:25565 \
-  voicechat=udp://127.0.0.1:24454
-```
-
-Then publish it as HTTP:
-
-```yaml
-ingress:
-  - hostname: play.example.com
-    service: http://127.0.0.1:25577
-  - service: http_status:404
-```
-
-Enhanced mode terminates WebSocket locally, then dispatches the byte stream:
+## Preferred deployment
 
 ```text
-Minecraft bytes -> Minecraft backend
-MCF1 + HELLO -> capability response
-MCF1 + OPEN_STREAM -> configured TCP service
-MCF1 + OPEN_DATAGRAM -> configured UDP service
+Minecraft + MCflare
+        | WSS :443
+        v
+play.example.com (Cloudflare orange proxy)
+        | HTTPS/WSS
+        v
+reverse proxy / TLS
+        | local HTTP/WebSocket
+        v
+MCflare Gateway
+        | TCP
+        v
+127.0.0.1:25565
 ```
 
-The gateway is intentionally one process. It also sees Cloudflare HTTP metadata such as the presence of `CF-Connecting-IP` and `CF-Ray`; the origin should remain private so those headers cannot be spoofed by direct Internet clients.
+Tunnel remains optional:
 
-## Compatibility model
+```text
+Cloudflare -> Tunnel -> same MCflare Gateway -> Minecraft
+```
 
-Most mods need no MCflare integration because their packets already travel inside Minecraft's connection. Only mods that create separate sockets need an adapter.
+The player protocol and gateway do not change between Orange and Tunnel.
 
-- `core/` — dependency-free Java 8 RFC6455 carrier, discovery, and Enhanced service protocol.
-- `gateway/` — one Java 8 HTTP/WebSocket gateway for Minecraft plus optional stream/datagram services.
-- root module — current Fabric 26.2 connection hooks.
-- future loader adapters — thin hooks that reuse `core/`; they should not reimplement transport.
+## Current implementation
 
-Simple Voice Chat 2.6.22+26.2 is the first proven side-service adapter. MCflare uses SVC's official client-socket API: ordinary servers keep stock UDP, while an MCflare-protected server uses the Enhanced `voicechat` datagram service and fails closed if that service is absent. WSS datagrams are the proven compatibility path; native realtime UDP/TURN remains a future candidate pending real loss/jitter comparisons.
+- `core/` — dependency-free Java-8 RFC6455 client, Minecraft discovery, and loopback carrier.
+- `gateway/` — minimal HTTP/WebSocket-to-Minecraft TCP gateway.
+- root module — current Fabric 26.2 hooks.
+
+The current routing still uses a Minecraft Status probe over WSS for zero-config detection. The next latency refactor will use a dedicated WebSocket subprotocol and retain the successful discovery socket for the real Minecraft connection, removing an avoidable extra handshake. See `docs/LOW_LATENCY_ARCHITECTURE.md`.
 
 ## Build
 
@@ -84,9 +59,7 @@ Simple Voice Chat 2.6.22+26.2 is the first proven side-service adapter. MCflare 
 ./gradlew clean build
 ```
 
-Core protocol tests run as part of `build`. CI performs the same clean build on every push and pull request.
-
-Start with `docs/PROJECT_KNOWLEDGE.md` for the canonical engineering record. `docs/DESIGN.md` is the concise architecture summary and `docs/TEST_MATRIX.md` tracks proof gates.
+Start with `docs/PROJECT_KNOWLEDGE.md` for the canonical engineering record, `docs/LOW_LATENCY_ARCHITECTURE.md` for the target Orange-first design, and `docs/TEST_MATRIX.md` for proof gates.
 
 ## Attribution
 

@@ -79,34 +79,12 @@ This removes Minecraft Status parsing from route discovery and removes one TCP +
 Server-list status still works normally: Minecraft's real status packets pass through the prepared carrier after selection, so the gateway does not synthesize or parse Minecraft status.
 
 Positive cache entries mean "this hostname is expected to be MCflare". On a cached-positive route, directly open the real WebSocket and fail closed if it cannot be established. Negative cache entries skip WebSocket discovery briefly for ordinary servers.
-## 5. Side services use URL paths, not MCF1
+## 5. Separate sockets are out of scope
 
-Use HTTP/WebSocket routing for service selection:
+MCflare only transports Minecraft's own TCP connection. Mods that use Minecraft custom payloads already travel through that byte stream and work transparently. Mods that open independent TCP/UDP sockets use their own networking.
 
-```text
-/.well-known/mcflare
-    -> Minecraft byte stream
+This intentionally removes MCF1, capability negotiation, generic stream/datagram services, Simple Voice Chat integration, TURN planning, and all side-service routing from the product architecture. Historical experiments remain recorded in `PROJECT_KNOWLEDGE.md`.
 
-/.well-known/mcflare/v1/datagram/voicechat
-    -> UDP service `voicechat`
-
-/.well-known/mcflare/v1/stream/<service>
-    -> reserved; implement only when a real TCP-side-service adapter exists
-```
-
-For a datagram service, the gateway rejects an unknown service during setup. After upgrade it sends a tiny server-first acknowledgement; the client sends no application bytes until the acknowledgement arrives. This makes failure against a non-Enhanced/legacy endpoint safe and fail-closed.
-
-Keep explicit `u16 length + payload` datagram records. WebSocket frame boundaries are transport details and must not define UDP packet boundaries.
-
-Delete from the hot path:
-
-- `MCF1` magic sniffing.
-- HELLO/capability JSON.
-- `GatewayControlClient`.
-- `OPEN_DATAGRAM` and speculative `OPEN_STREAM` opcodes.
-- capability `CompletableFuture` in the SVC adapter.
-
-The SVC adapter already knows it requires `voicechat`; one direct service connection is enough.
 ## 6. Loader-independent route resolver
 
 Move route policy from the Fabric `TunnelManager` into Java-8 `core` before adding more loaders.
@@ -214,9 +192,7 @@ Implement in small regression-safe stages:
 3. Make successful discovery return a prepared live WebSocket and reuse it for the actual carrier.
 4. Replace Minecraft-status discovery with upgrade-only discovery.
 5. Move discovery/cache policy to Java-8 core.
-6. Change Enhanced service selection from MCF1 to URL paths.
 7. Simplify SVC to one direct voice-service connection.
-8. Remove `GatewayControlClient`, MCF1 control/opcodes, and unused speculative stream implementation.
 9. Collapse redundant carrier wrapper/global lifecycle state.
 10. Deploy an Orange-cloud test hostname to the same gateway and run direct/Orange/Tunnel latency A/B tests.
 11. Only after the new path is proven, make Orange the documented default and Tunnel the optional deployment.

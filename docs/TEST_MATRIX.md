@@ -1,86 +1,30 @@
-# MCflare test matrix
+# MCflare Test Matrix
 
-> Detailed evidence and design context live in `PROJECT_KNOWLEDGE.md`.
+## Proven current baseline
 
-## Proven gates
-
-| Gate | Result |
+| Test | Result |
 |---|---|
-| Real Minecraft Status over WSS -> Cloudflare -> TCP | PASS |
-| Full Minecraft 26.2 login through Basic-style carrier | PASS |
-| Player path with no `cloudflared` subprocess/binary | PASS |
-| Ordinary direct server fallback | PASS |
-| Ordinary direct regression after fail-closed refactor | PASS; discovery miss ~3 ms in local test |
-| Java-8 `core` bytecode build | PASS |
-| Real Temurin 8u504 `core` against live Cloudflare endpoint | PASS |
-| Enhanced HTTP/WSS gateway Status | PASS |
-| Enhanced full Minecraft login | PASS |
-| `CF-Connecting-IP` / `CF-Ray` presence at Enhanced gateway | PASS |
-| MCF1 capability negotiation | PASS |
-| MCF1 UDP round trip: 1, 20, 256, 1200, 4096, 8192 bytes | PASS |
-| Hardened RFC6455 client against live Cloudflare | PASS |
-| Gateway 256-connection cap / 257th connection | PASS; immediate HTTP 503 |
-| Enhanced gateway killed during a game | clean disconnect observed |
-| Edge restarted then route reused | PASS at Status layer |
-| Fail-closed routing state refactor | build/tests PASS; protected full login PASS |
-| Simple Voice Chat 2.6.22+26.2 over Enhanced `voicechat` datagram | PASS; auth + connection check acknowledged |
-| Voice-enabled MCflare artifact with Simple Voice Chat absent | PASS; no hard runtime dependency, protected full login succeeds |
-| Protected MCflare server without `voicechat` service | PASS; Minecraft remains joined, voice fails closed |
-| Ordinary non-MCflare SVC server | PASS; stock UDP auth + connection check |
-| Datagram channel idle 5.5 s then round trip | PASS |
-| Quick Tunnel with blocked QUIC/7844 | external failure reproduced on baseline and current branch |
-| Quick Tunnel forced `--protocol http2` on same network | baseline + current branch full login PASS |
-| Named Tunnel Basic (`mcflare-test`) full 26.2 login | PASS on Oracle control route |
-| Named Tunnel Enhanced HTTP/WSS (`mcflare2-test`) full 26.2 login | PASS on Oracle; gateway saw Cloudflare source headers |
-| Named Tunnel Enhanced + Simple Voice Chat (`mcflare2-test`) | PASS; Minecraft join + SVC authentication + connection validation, UDP origin loopback-only |
-## Measured observations
+| Fabric 26.2 protected full login | PASS |
+| Ordinary server direct fallback | PASS |
+| Java-8 core TLS/WSS probe against Cloudflare | PASS |
+| Named Tunnel Basic control full login | PASS (historical deployment) |
+| Named Tunnel HTTP/WSS gateway full login | PASS |
+| Gateway source headers present behind Cloudflare HTTP | PASS |
+| Gateway 256-slot overload rejects next connection with 503 | PASS |
+| WebSocket fragmentation/validation hardening | PASS |
+| Fail-closed protected carrier behavior | PASS by state design + normal regression |
+| SVC-over-MCflare experiment | PASS historically; feature retired as out of scope |
 
-- Protected discovery on temporary Quick Tunnels has commonly completed in roughly 0.9-1.3 seconds in recent client tests; this is not an SLA.
-- WSS datagram benchmark: 60 x 200-byte request/reply packets averaged ~155 ms RTT, median ~155 ms, p95 ~177 ms, max ~211 ms.
-- The latest ordinary direct regression used `127.0.0.1.nip.io:25575`, classified it non-MCflare in ~3 ms, and completed a normal full login.
-- The post-hardening protected regression completed discovery, created an in-process carrier, and the real 26.2 test server logged the player joining.
-- During the 2026-08-30 Mac test, Cloudflare connector pre-checks showed QUIC/7844 blocked. An old Quick Tunnel could answer Status while full streams timed out; a fresh default Quick Tunnel could not connect. Forcing `cloudflared --protocol http2` restored full login. This was reproduced with both baseline `a7e6a74` and the current voice branch, proving it was external to the voice changes.
+## Current scope gates
 
-## Automated tests
+1. Clean build/tests after Minecraft-only simplification.
+2. Full named-gateway Minecraft login with stripped gateway.
+3. Orange-cloud WSS Status + full login.
+4. Direct vs Orange vs Tunnel RTT/jitter benchmark.
+5. Prepared-WebSocket discovery refactor, followed by the same benchmark.
+6. Online-mode Minecraft gate.
+7. Forge/NeoForge/legacy adapter gates after the transport is frozen.
 
-`core` currently covers:
+## Compatibility rule
 
-- MCF1 preamble/service encoding and service-ID validation.
-- Minecraft Status-handshake encoding, including protocol, hostname and port.
-- Invalid/oversized service identifiers.
-
-CI runs `./gradlew --no-daemon clean build`.
-## Version/loader targets
-
-Support is claimed only after a real build plus connection test.
-
-| Family | Target | State |
-|---|---|---|
-| Current | Fabric 26.2 | proven |
-| Current | Quilt using Fabric-compatible artifact | pending |
-| Current | NeoForge 26.2 | pending |
-| Current | Forge 26.2 | pending |
-| Modern modpacks | Fabric/Forge 1.20.1 | pending |
-| Legacy | Forge 1.12.2 | next legacy proof |
-| Legacy | Forge 1.8.9 | pending |
-
-The Java-8 transport runtime is proven independently. Loader/version-specific hooks remain separate proof gates.
-## Pending gates
-
-1. Add a minimal automated test seam that forces protected-route setup failure and asserts the direct destination is never selected. The production state model is already fail-closed; this is a regression-proofing test, not a new architecture.
-2. Repeat the complete suite against a named production-style Tunnel instead of only disposable Quick Tunnels.
-3. Multi-client concurrency and connection-churn testing.
-4. Longer sessions under realistic gameplay/network changes.
-5. Two-client real audio quality test for Simple Voice Chat over MCF1 datagrams.
-6. TURN/UDP voice experiment and loss/jitter comparison against WSS fallback.
-7. Velocity/Paper/proxy compatibility tests.
-8. Forge 1.12.2 legacy adapter proof.
-
-## Mod compatibility policy
-
-- Mods using Minecraft's own payload/plugin channels need no adapter.
-- Separate TCP services use `OPEN_STREAM`.
-- Separate UDP services use `OPEN_DATAGRAM` or a future realtime transport.
-- Prefer official mod APIs over mixins/global packet interception.
-- Simple Voice Chat is now the first proven side-service adapter on Fabric 26.2. It uses the official socket API and is compile-only/optional.
-- On an MCflare-protected server, SVC is fail-closed unless Enhanced advertises `voicechat`; ordinary non-MCflare servers remain on stock UDP.
+Mods using Minecraft custom payloads/plugin messages share the Minecraft connection and require no MCflare adapter. Mods opening separate TCP/UDP sockets are outside MCflare's transport scope and must expose/use their own service.
