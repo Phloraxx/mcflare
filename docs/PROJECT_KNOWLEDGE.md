@@ -571,3 +571,30 @@ The Minecraft-only simplification and first-connect latency refactor are now imp
 The refactor passed a clean build, Java-8 resolver tests, and a full Minecraft 26.2 join through the named HTTP/Tunnel gateway. The gateway logged one upgrade for the actual join and the Oracle Minecraft server logged `Phlo joined the game`.
 
 A 10-attempt named-Tunnel prepared-handshake sample then produced 9 successes (447, 460, 463, 469, 476, 700, 997, 1309, 2390 ms) and one TCP connect timeout. Treat this only as the current Tunnel path baseline. The product decision remains Orange proxy as the default and Tunnel as optional origin reachability.
+
+## 2026-08-31 true Orange validation and benchmark correction
+
+The product scope is now Minecraft-only. Historical SVC/MCF1/datagram sections above are retained as experiment history, but they are superseded by the later Minecraft-only decision and are not active architecture.
+
+Two initially attempted "Orange" benchmark hostnames were later found to be invalid controls:
+
+- `payment.mulearnscet.in` is an ingress on Tunnel `c2b74634-394b-4427-b588-d004af9e853b`.
+- `aegissafety.co.in` is an ingress on Tunnel `5b4c3fe5-64de-4f0b-be67-943b88bc7d7c`.
+
+Their earlier latency measurements must not be cited as Orange-cloud results.
+
+A valid true-Orange path was established on `hooks.ieeesahrdaya.com` by routing only `/.well-known/mcflare` from normal Cloudflare proxying to Oracle Traefik and then the MCflare gateway. All running `cloudflared` container configurations were audited; `hooks.ieeesahrdaya.com` is absent from every Tunnel ingress. The public `mcflare.v1` WSS upgrade and a full Minecraft 26.2 login both passed.
+
+Same Mac, same Oracle backend/gateway, 15 samples per path:
+
+| Path | Setup median | Minecraft RTT median | RTT p95 |
+|---|---:|---:|---:|
+| Direct Oracle WSS | 228 ms | 73 ms | 286 ms |
+| True Orange | 505 ms | 148 ms | 409 ms |
+| Named Tunnel | 502 ms | 174 ms | 355 ms |
+
+True Orange reduced median gameplay RTT by about 26 ms versus the named Tunnel in this run, but remained about 75 ms slower than direct. This indicates that removing the Tunnel connector helps, while Cloudflare edge/origin routing remains the larger latency cost on this network.
+
+During Orange testing, one returned Cloudflare IPv4 address timed out while another connected immediately. `Rfc6455Client` was therefore hardened to race resolved addresses with a short stagger and use the first successful TCP connection. The fix passed the clean build, true-Orange WSS, full Minecraft login, and a real Temurin Java 8 runtime test.
+
+Tunnel-specific code is now absent from MCflare. Tunnel may still be used externally to publish the same HTTP/WebSocket gateway, but it does not alter client/gateway protocol or source structure.

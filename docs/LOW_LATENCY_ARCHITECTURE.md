@@ -1,208 +1,117 @@
 # MCflare Low-Latency Architecture
 
-Status: proposed next architecture after named-Tunnel/SVC proof. Orange-cloud HTTP/WebSocket proxying is the preferred production deployment; Cloudflare Tunnel remains an optional transport to the same gateway.
+Status: current target architecture after the Minecraft-only simplification and true Orange-cloud validation on 2026-08-31.
 
-## 1. Goal
+## Goal
 
-The target is not literally zero network latency; any proxy adds path length. The engineering goal is to make **MCflare's own processing overhead negligible** so almost all steady-state latency is the unavoidable network route:
+MCflare has one job: carry the normal Minecraft Java TCP byte stream over a standard WebSocket. Anything already inside Minecraft's connection works transparently. Separate TCP/UDP/HTTP connections opened by mods are outside MCflare's scope.
+
+The latency goal is not a literal zero added RTT; it is to make MCflare's own processing overhead negligible and avoid redundant network handshakes or proxy layers.
+
+## Preferred path
 
 ```text
-player -> nearest Cloudflare edge -> Oracle origin
+Minecraft -> loopback carrier -> WSS :443 -> Cloudflare Orange -> reverse proxy -> MCflare Gateway -> Minecraft TCP
 ```
 
-The current Tunnel path adds another stateful connector/overlay leg:
+Cloudflare Tunnel is not a code feature. An admin who cannot expose an HTTPS origin may optionally place the exact same gateway behind a Tunnel, but client/gateway behavior is unchanged.
+
+## Current wire behavior
+
+The client opens:
 
 ```text
-player -> Cloudflare edge -> Tunnel overlay -> cloudflared -> gateway -> Minecraft
-```
-
-Orange-cloud mode removes the Tunnel connector, Tunnel QUIC/HTTP2 transport, connector reconnection state, and Tunnel ingress processing from the normal gameplay path.
-
-## 2. Performance targets
-
-- One long-lived WebSocket per Minecraft connection.
-- No second discovery WebSocket before the real connection.
-- No capability/HELLO connection for known side services.
-- No in-band Minecraft-vs-service multiplexer.
-- No packet compression or transformation inside MCflare.
-- `TCP_NODELAY` on latency-sensitive TCP sockets.
-- Loopback/reverse-proxy/gateway overhead should remain operationally negligible compared with WAN RTT.
-- Benchmark Orange vs Tunnel vs direct baseline before declaring a production latency target.
-## 3. Unified deployment model
-
-The client protocol is identical regardless of how Cloudflare reaches the gateway.
-
-### Preferred: Orange-cloud proxy
-
-```text
-Minecraft + MCflare
-        |
-        | WSS :443
-        v
-play.example.com (Cloudflare proxied DNS)
-        |
-        v
-origin TLS/reverse proxy
-        |
-        v
-MCflare Gateway
-        |
-        +--> 127.0.0.1:25565 Minecraft
-        +--> 127.0.0.1:24454 UDP voice (optional)
-```
-
-### Optional: Cloudflare Tunnel
-
-```text
-Minecraft + MCflare -> WSS :443 -> Cloudflare -> cloudflared -> same MCflare Gateway
-```
-
-Tunnel is for CGNAT, no-public-IP, or zero-public-ingress deployments. There is no separate Tunnel-specific MCflare protocol and no raw `tcp://Minecraft` mode in the preferred architecture.
-## 4. WebSocket upgrade is discovery
-
-Do not open a WebSocket, send a Minecraft Status request to prove MCflare, close it, then open another WebSocket for gameplay.
-
-Use one standardized upgrade:
-
-```text
-GET /.well-known/mcflare HTTP/1.1
-Upgrade: websocket
+wss://play.example.com/.well-known/mcflare
 Sec-WebSocket-Protocol: mcflare.v1
 ```
 
-The gateway accepts only the MCflare path/protocol and returns the same subprotocol in the `101 Switching Protocols` response. A successful upgrade is therefore sufficient proof that the hostname supports MCflare.
+A real gateway must echo `mcflare.v1` in its `101 Switching Protocols` response. That successful WebSocket is retained as the gameplay transport; discovery does not open a second connection.
 
-The successful WebSocket is a **prepared transport**. Keep it alive and give it to `LoopbackCarrier`; do not reconnect.
+There is no MCF1 control protocol, capability JSON, service multiplexer, UDP framing, or Minecraft packet translation.
 
-This removes Minecraft Status parsing from route discovery and removes one TCP + TLS + WebSocket handshake from the first protected connection.
+## Client core
 
-Server-list status still works normally: Minecraft's real status packets pass through the prepared carrier after selection, so the gateway does not synthesize or parse Minecraft status.
+The dependency-free Java-8 core contains four concepts:
 
-Positive cache entries mean "this hostname is expected to be MCflare". On a cached-positive route, directly open the real WebSocket and fail closed if it cannot be established. Negative cache entries skip WebSocket discovery briefly for ordinary servers.
-## 5. Separate sockets are out of scope
+- `Rfc6455Client` — TLS + RFC6455 transport.
+- `McflareProtocol` — path and subprotocol constants.
+- `RouteResolver` — direct-vs-MCflare route selection and cache policy.
+- `LoopbackCarrier` — presents a local TCP socket to Minecraft and copies bytes to/from WSS.
 
-MCflare only transports Minecraft's own TCP connection. Mods that use Minecraft custom payloads already travel through that byte stream and work transparently. Mods that open independent TCP/UDP sockets use their own networking.
+## Route selection
 
-This intentionally removes MCF1, capability negotiation, generic stream/datagram services, Simple Voice Chat integration, TURN planning, and all side-service routing from the product architecture. Historical experiments remain recorded in `PROJECT_KNOWLEDGE.md`.
+For an unknown hostname, MCflare races a secure WSS attempt against ordinary Minecraft reachability. A successful `mcflare.v1` upgrade wins immediately. If ordinary TCP finishes first, MCflare gets a short secure-preference window before direct is selected.
 
-## 6. Loader-independent route resolver
+Positive MCflare results are cached longer than negative results. A cached protected server always fails closed: if a later WSS connection fails, MCflare does not silently fall back to a potentially exposed origin.
 
-Move route policy from the Fabric `TunnelManager` into Java-8 `core` before adding more loaders.
+Minecraft remains authoritative for DNS/SRV resolution of ordinary direct servers. Loader adapters only provide the logical hostname/port and Minecraft-resolved address.
 
-The loader adapter supplies only:
+`Rfc6455Client` races resolved origin/Cloudflare addresses with a short stagger instead of trusting the first DNS result. This was added after one Cloudflare anycast IPv4 address on the test network timed out while another connected immediately.
 
-- logical hostname and port entered by the player;
-- current Minecraft protocol version only if a future feature genuinely needs it;
-- Minecraft's already-resolved/SRV destination for ordinary direct TCP.
+## Why the loopback carrier stays
 
-Core owns hostname normalization, positive/negative caches, in-flight probe deduplication, WebSocket preparation, direct reachability checks, and fail-closed policy.
+Minecraft still sees a normal TCP socket. The localhost hop costs essentially nothing compared with WAN RTT and avoids replacing Minecraft's Netty transport separately for every version/loader family.
 
-Use one in-flight future per hostname instead of a separate `probeLocks` map. Concurrent server-list pings should share discovery work.
+A Minecraft `Connection` directly owns its `LoopbackCarrier`. Disconnect/setup failure closes it; there is no global tunnel/carrier registry.
 
-For an unknown server, start the MCflare upgrade asynchronously while checking ordinary TCP reachability on the existing Minecraft worker thread. If the MCflare upgrade succeeds, it wins. If ordinary TCP works and MCflare does not establish inside the short preference window, select direct. If ordinary TCP is unavailable, wait for the full MCflare setup timeout.
+## Gateway
 
-Do not own DNS/SRV resolution. Minecraft remains authoritative for ordinary-server resolution.
+The gateway has one responsibility:
 
-## 7. Carrier ownership
+1. accept HTTP/WebSocket on `/.well-known/mcflare`;
+2. require `mcflare.v1`;
+3. open one configured Minecraft TCP backend;
+4. copy bytes in both directions;
+5. enforce handshake/frame/connection bounds.
 
-Keep the localhost carrier. It costs essentially no WAN latency and avoids version-specific Netty transport implementations.
+It does not parse Minecraft packets, choose arbitrary destinations, proxy UDP, or multiplex external mod services.
 
-Collapse `RunningTunnel`/`TunnelStatus` where practical. A Minecraft `Connection` should directly own the `LoopbackCarrier` selected for that connection. Disconnect or setup failure closes it. Once a hostname is confirmed MCflare, carrier/WebSocket failure never falls back to direct TCP.
-## 8. Gateway runtime
+Keep the blocking implementation while it remains easy to audit. Make the connection ceiling configurable before large-server deployment; do not add Netty or another framework without measured need.
 
-Keep blocking I/O and simple pipes; do not introduce Netty just to reduce thread count. The standalone gateway can target a modern Java runtime even though the client core remains Java 8.
+## Orange-cloud deployment
 
-A later implementation may use Java 21 virtual threads for accepted WebSockets and downstream pipes. That preserves readable blocking code while making hundreds of long-lived connections cheap. Keep an explicit configurable connection ceiling regardless of thread model.
-
-Gateway duties should remain only:
-
-1. validate HTTP/WebSocket upgrade and MCflare subprotocol;
-2. select route from the URL path;
-3. expose trusted Cloudflare request metadata to logging/rate-limit hooks;
-4. stream Minecraft bytes unchanged;
-5. frame/unframe configured UDP side services;
-6. enforce connection/frame/datagram/time limits.
-
-No Minecraft packet parser belongs in the gateway.
-
-## 9. Orange-cloud origin layout
-
-Preferred production layout when the server has a public IP:
+Preferred production layout:
 
 ```text
-Cloudflare :443 -> existing TLS reverse proxy -> MCflare Gateway on private/loopback port
+Cloudflare Orange :443 -> existing TLS reverse proxy -> MCflare Gateway -> 127.0.0.1:25565
 ```
 
-Use Full (strict) TLS to the origin. Prefer an Origin CA or publicly trusted origin certificate. Restrict origin access to Cloudflare where operationally possible; Authenticated Origin Pulls can provide additional origin authentication. Never expose Minecraft TCP 25565 or SVC UDP 24454 merely to make Orange mode work.
+Use a dedicated proxied hostname, Full (strict) origin TLS where possible, and keep public Minecraft TCP closed. Restrict origin access to Cloudflare/reverse-proxy traffic where operationally practical.
 
-If port 443 is already managed by Dokploy/Traefik/Caddy, reuse it. A same-host reverse proxy adds negligible latency compared with WAN RTT and is simpler/safer than implementing certificate management in the Java gateway.
-## 10. Latency model
+## 2026-08-31 latency benchmark
 
-For Minecraft itself, MCflare should add almost no compute latency. WebSocket framing is tiny compared with network RTT, and Minecraft is already TCP-based.
+The valid same-client/same-backend 15-sample comparison was:
 
-The dominant variable is routing:
+| Path | Setup median | Minecraft RTT median | RTT p95 |
+|---|---:|---:|---:|
+| Direct Oracle WSS (`aegis-safety-preview-144-24-114-90.sslip.io`) | 228 ms | 73 ms | 286 ms |
+| True Orange (`hooks.ieeesahrdaya.com`, no cloudflared ingress) | 505 ms | 148 ms | 409 ms |
+| Named Tunnel (`mcflare2-test.mulearnscet.in`) | 502 ms | 174 ms | 355 ms |
+
+True Orange improved median gameplay RTT by about 26 ms versus the named Tunnel in this run. Direct remained about 75 ms faster than Orange, so Cloudflare edge/origin routing is still the dominant extra latency on this test network.
+
+Earlier measurements using `payment.mulearnscet.in` and `aegissafety.co.in` are invalid as Orange measurements: both hostnames were later confirmed in local `cloudflared` ingress configurations and are Tunnel-backed.
+
+The Orange path was additionally proven with a full Minecraft 26.2 login; the real Oracle server logged `Phlo joined the game`. The same Orange WSS path also succeeded under a real Temurin Java 8 runtime.
+
+## Interpreting "no lag"
+
+MCflare's local work is byte copying plus small WebSocket framing; there is no JSON/base64/compression/protocol translation on the gameplay stream. The remaining large variable is network routing through Cloudflare.
+
+Do not rewrite the loopback carrier or gateway to chase tens of milliseconds that are demonstrably outside the process. Future latency work should measure Cloudflare PoP/origin routing, ISP variation, sustained gameplay jitter, and chunk/teleport bursts.
+
+Argo should not be assumed to solve this path; Cloudflare currently documents WebSockets as incompatible with Argo Smart Routing.
+
+## Optional Tunnel deployment
+
+Tunnel is strictly an infrastructure fallback for CGNAT, no-public-ingress, or zero-inbound-origin environments:
 
 ```text
-direct: player -> Oracle
-Orange: player -> Cloudflare edge -> Oracle
-Tunnel: player -> Cloudflare edge -> Tunnel connector path -> Oracle
+Cloudflare -> cloudflared -> same MCflare Gateway -> Minecraft
 ```
 
-Orange is expected to remove the connector/overlay penalty that caused the observed Tunnel ping increase, but this must be measured. Cloudflare anycast decides the edge PoP and Argo Smart Routing is not compatible with WebSockets, so MCflare cannot guarantee that every ISP/location gets a route as short as direct Oracle.
+There is no Tunnel-specific client code, gateway code, wire protocol, discovery mode, or configuration state inside MCflare.
 
-Do not optimize for handshake latency at the expense of steady-state simplicity. The important gameplay metric is established-session RTT/jitter. Still, prepared WebSockets remove an avoidable duplicate first-connection handshake.
+## Out of scope
 
-Benchmark at minimum:
-
-- direct-origin test baseline from the same client/network;
-- Orange WSS Minecraft path;
-- Tunnel WSS Minecraft path;
-- p50/p95/p99 application RTT and jitter over several minutes;
-- packet throughput during chunk loading/teleport;
-- CPU, allocations, and gateway scheduling under multiple clients.
-
-Orange becomes the official default only after it wins the actual A/B test or stays within an agreed small overhead budget.
-## 11. Voice latency policy
-
-Simple Voice Chat over WSS is proven functionally, including through the named Tunnel. Orange should reduce its route overhead too, but voice remains more sensitive than Minecraft because TCP retransmission can cause head-of-line delay.
-
-Therefore:
-
-- Keep WSS datagrams as the zero-extra-infrastructure default.
-- Measure real two-client speech over Orange before adding another transport.
-- If voice latency/jitter or loss recovery is materially worse than direct UDP, add a low-latency UDP relay transport (for example TURN) behind the existing SVC socket abstraction.
-- Do not add TURN credentials/allocation/session logic until the WSS audio test demonstrates the need.
-
-Minecraft and voice must remain independent channels. A voice stall must never block the Minecraft WebSocket.
-
-## 12. Cloudflare-specific settings
-
-- WebSockets must be enabled.
-- Do not put browser-interactive Access or Managed Challenge behavior on MCflare paths.
-- WAF/rate limiting may protect the initial `101` upgrade; established WebSocket payloads are not inspected by WAF.
-- Keep application-level heartbeat; Cloudflare can close idle WebSockets and edge deployments can terminate established sessions.
-- Do not enable Argo expecting a WebSocket latency improvement; Cloudflare currently documents WebSockets as incompatible with Argo.
-- Do not enable HTTP/2-to-origin for the hand-written HTTP/1.1 gateway unless the TLS reverse proxy terminates that protocol and forwards a normal WebSocket to MCflare.
-## 13. Migration from the current proven implementation
-
-Implement in small regression-safe stages:
-
-1. Add the Orange-first architecture document and benchmark plan without changing wire behavior.
-2. Add WebSocket subprotocol validation to client/gateway.
-3. Make successful discovery return a prepared live WebSocket and reuse it for the actual carrier.
-4. Replace Minecraft-status discovery with upgrade-only discovery.
-5. Move discovery/cache policy to Java-8 core.
-7. Simplify SVC to one direct voice-service connection.
-9. Collapse redundant carrier wrapper/global lifecycle state.
-10. Deploy an Orange-cloud test hostname to the same gateway and run direct/Orange/Tunnel latency A/B tests.
-11. Only after the new path is proven, make Orange the documented default and Tunnel the optional deployment.
-
-Every stage must keep ordinary-server fallback, protected fail-closed behavior, no-SVC loading, named-Tunnel Minecraft, and named-Tunnel SVC tests green.
-
-## 14. Definition of "seamless"
-
-Player: install the matching MCflare client once, type the normal Minecraft hostname, join. No helper daemon, local port, TXT/SRV metadata, Cloudflare account, WARP, or per-server MCflare configuration.
-
-Admin Orange: run Minecraft, run one MCflare Gateway sidecar, expose only HTTPS through the existing reverse proxy, create one proxied DNS record, keep game/voice origin ports private.
-
-Admin Tunnel: same gateway and client protocol; replace public origin routing with `cloudflared -> gateway` when inbound HTTPS is impossible or intentionally forbidden.
+Separate sockets opened by mods are not transported by MCflare. Simple Voice Chat therefore uses its own native UDP service. Historical SVC/MCF1/datagram experiments remain in `PROJECT_KNOWLEDGE.md` only as superseded research evidence.

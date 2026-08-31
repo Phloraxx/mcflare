@@ -10,7 +10,7 @@ MCflare transports one thing: the normal Minecraft Java TCP byte stream. Traffic
 Minecraft -> loopback carrier -> WSS :443 -> Cloudflare -> MCflare Gateway -> Minecraft TCP
 ```
 
-Normal Cloudflare orange-cloud proxying is the preferred deployment. Cloudflare Tunnel is an optional way for Cloudflare to reach the exact same gateway when the origin cannot accept inbound HTTPS.
+Normal Cloudflare orange-cloud proxying is the preferred deployment. Tunnel is not part of MCflare code; it is only an optional external origin transport for environments that cannot accept inbound HTTPS.
 
 ## Why the loopback carrier stays
 

@@ -6,7 +6,7 @@ MCflare carries the normal Minecraft Java TCP connection over a standard WebSock
 
 **Admin:** run one small MCflare gateway in front of Minecraft, then publish the gateway through orange-cloud proxying (preferred) or Tunnel (optional). No TXT discovery record, player-side `cloudflared`, WARP, custom launcher, or special server address is required.
 
-> Status: experimental. Fabric 26.2 is proven end-to-end. The transport core and gateway compile to Java 8. Orange-first latency benchmarking is the next deployment gate.
+> Status: experimental. Fabric 26.2 is proven end-to-end through a true orange-cloud path and a named Tunnel control. The transport core and gateway compile to Java 8; the true-Orange WSS path is also proven on a real Java 8 runtime.
 
 ## Scope
 
@@ -47,7 +47,7 @@ The player protocol and gateway do not change between Orange and Tunnel.
 
 ## Current implementation
 
-- `core/` — dependency-free Java-8 RFC6455 client, Minecraft discovery, and loopback carrier.
+- `core/` — dependency-free Java-8 RFC6455 client, route resolver, and loopback carrier.
 - `gateway/` — minimal HTTP/WebSocket-to-Minecraft TCP gateway.
 - root module — current Fabric 26.2 hooks.
 

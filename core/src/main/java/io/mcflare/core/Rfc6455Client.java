@@ -10,8 +10,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -19,6 +21,11 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Dependency-free RFC 6455 client, intentionally compatible with Java 8. */
 public final class Rfc6455Client implements Closeable {
@@ -53,8 +60,7 @@ public final class Rfc6455Client implements Closeable {
         if (host == null || host.trim().isEmpty()) throw new IllegalArgumentException("host");
         if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("path");
 
-        Socket raw = new Socket();
-        raw.connect(new InetSocketAddress(host, port), connectTimeoutMs);
+        Socket raw = connectTcp(host, port, connectTimeoutMs);
         raw.setTcpNoDelay(true);
         raw.setKeepAlive(true);
         raw.setSoTimeout(connectTimeoutMs);
@@ -73,6 +79,76 @@ public final class Rfc6455Client implements Closeable {
             try { if (ssl != null) ssl.close(); else raw.close(); } catch (IOException ignored) {}
             throw e;
         }
+    }
+
+    private static Socket connectTcp(final String host, final int port, final int timeoutMs)
+            throws IOException {
+        final InetAddress[] addresses = InetAddress.getAllByName(host);
+        if (addresses.length == 0) throw new IOException("No addresses for " + host);
+        if (addresses.length == 1) {
+            Socket socket = new Socket();
+            socket.connect(new InetSocketAddress(addresses[0], port), timeoutMs);
+            return socket;
+        }
+
+        final AtomicReference<Socket> winner = new AtomicReference<Socket>();
+        final AtomicReference<IOException> lastError = new AtomicReference<IOException>();
+        final AtomicInteger remaining = new AtomicInteger(addresses.length);
+        final AtomicBoolean finished = new AtomicBoolean(false);
+        final CountDownLatch completed = new CountDownLatch(1);
+        final int staggerMs = 100;
+
+        for (int i = 0; i < addresses.length; i++) {
+            final InetAddress address = addresses[i];
+            final int delayMs = i * staggerMs;
+            Thread attempt = new Thread(new Runnable() {
+                @Override public void run() {
+                    Socket candidate = null;
+                    try {
+                        if (delayMs > 0) Thread.sleep(delayMs);
+                        if (finished.get() || winner.get() != null) return;
+                        candidate = new Socket();
+                        int attemptTimeout = Math.max(250, timeoutMs - Math.min(timeoutMs - 1, delayMs));
+                        candidate.connect(new InetSocketAddress(address, port), attemptTimeout);
+                        if (finished.get() || !winner.compareAndSet(null, candidate)) {
+                            try { candidate.close(); } catch (IOException ignored) {}
+                        } else {
+                            completed.countDown();
+                            candidate = null;
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } catch (IOException e) {
+                        lastError.set(e);
+                    } finally {
+                        if (candidate != null) {
+                            try { candidate.close(); } catch (IOException ignored) {}
+                        }
+                        if (remaining.decrementAndGet() == 0) completed.countDown();
+                    }
+                }
+            }, "mcflare-connect-" + i);
+            attempt.setDaemon(true);
+            attempt.start();
+        }
+
+        try {
+            completed.await(timeoutMs + 500L, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            finished.set(true);
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while connecting to " + host, e);
+        }
+
+        Socket selected = winner.get();
+        if (selected != null) {
+            finished.set(true);
+            return selected;
+        }
+        finished.set(true);
+        IOException error = lastError.get();
+        if (error != null) throw error;
+        throw new SocketTimeoutException("Connect timed out: " + host + ":" + port);
     }
 
     private static void configureTls(SSLSocket ssl, String host) {
