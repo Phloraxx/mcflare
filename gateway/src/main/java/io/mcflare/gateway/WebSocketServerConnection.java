@@ -40,7 +40,7 @@ final class WebSocketServerConnection implements Closeable {
         this.headers = headers;
     }
 
-    static WebSocketServerConnection accept(Socket socket, String requiredPath)
+    static WebSocketServerConnection accept(Socket socket, String requiredPath, String requiredSubprotocol)
             throws IOException {
         socket.setTcpNoDelay(true);
         socket.setKeepAlive(true);
@@ -51,7 +51,11 @@ final class WebSocketServerConnection implements Closeable {
             throw new IOException("unexpected WebSocket path");
         }
         validateUpgrade(request.headers);
-        writeUpgrade(socket.getOutputStream(), request.headers.get("sec-websocket-key"));
+        if (!containsToken(request.headers.get("sec-websocket-protocol"), requiredSubprotocol)) {
+            writeHttpError(socket.getOutputStream(), 400, "MCflare subprotocol required");
+            throw new IOException("missing MCflare WebSocket subprotocol");
+        }
+        writeUpgrade(socket.getOutputStream(), request.headers.get("sec-websocket-key"), requiredSubprotocol);
         socket.setSoTimeout(0);
         return new WebSocketServerConnection(socket, request.headers);
     }
@@ -248,7 +252,7 @@ final class WebSocketServerConnection implements Closeable {
         }
         return new UpgradeRequest(requestLine[1], headers);
     }
-    private static void writeUpgrade(OutputStream output, String key) throws IOException {
+    private static void writeUpgrade(OutputStream output, String key, String subprotocol) throws IOException {
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
             String accept = Base64.getEncoder().encodeToString(
@@ -256,7 +260,8 @@ final class WebSocketServerConnection implements Closeable {
             String response = "HTTP/1.1 101 Switching Protocols\r\n"
                     + "Upgrade: websocket\r\n"
                     + "Connection: Upgrade\r\n"
-                    + "Sec-WebSocket-Accept: " + accept + "\r\n\r\n";
+                    + "Sec-WebSocket-Accept: " + accept + "\r\n"
+                    + "Sec-WebSocket-Protocol: " + subprotocol + "\r\n\r\n";
             output.write(response.getBytes(StandardCharsets.US_ASCII));
             output.flush();
         } catch (NoSuchAlgorithmException e) {

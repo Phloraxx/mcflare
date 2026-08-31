@@ -1,7 +1,8 @@
 package io.mcflare.client.mixin.client;
 
 import io.mcflare.client.McflareClient;
-import io.mcflare.client.tunnel.TunnelStatus;
+import io.mcflare.client.interfaces.mixin.IConnection;
+import io.mcflare.core.LoopbackCarrier;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerStatusPinger;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
@@ -18,22 +19,18 @@ import java.net.InetSocketAddress;
 public abstract class ServerStatusPingerMixin {
     @Redirect(method = "pingServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;connectToServer(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/util/debugchart/LocalSampleLogger;)Lnet/minecraft/network/Connection;"))
     public Connection pingServer(InetSocketAddress address, EventLoopGroupHolder holder,
-                                 LocalSampleLogger localSampleLogger, ServerData data) {
+                                 LocalSampleLogger samples, ServerData data) {
         ServerAddress logical = ServerAddress.parseString(data.ip);
-        TunnelStatus status = McflareClient.TUNNEL_MANAGER.handleConnect(
-                logical.getHost(), logical.getPort(), address);
-        InetSocketAddress target = status.usesMcflare()
-                ? status.runningTunnel().access().tunnelAddress()
-                : address;
-
+        String host = logical.getHost();
+        LoopbackCarrier carrier = McflareClient.ROUTES.prepare(host, logical.getPort(), address,
+                error -> McflareClient.LOGGER.debug("MCflare carrier closed for {}: {}", host, error.toString()));
+        InetSocketAddress target = carrier == null ? address : carrier.getLocalAddress();
         try {
-            Connection connection = Connection.connectToServer(target, holder, localSampleLogger);
-            McflareClient.TUNNEL_MANAGER.prepareConnection(status, connection);
+            Connection connection = Connection.connectToServer(target, holder, samples);
+            if (carrier != null) ((IConnection) connection).setMcflareCarrier(carrier);
             return connection;
         } catch (RuntimeException | Error error) {
-            if (status.usesMcflare()) {
-                McflareClient.TUNNEL_MANAGER.closeTunnel(status.runningTunnel());
-            }
+            if (carrier != null) carrier.close();
             throw error;
         }
     }

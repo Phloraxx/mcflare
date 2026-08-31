@@ -1,6 +1,6 @@
 package io.mcflare.gateway;
 
-import io.mcflare.core.MinecraftStatusProbe;
+import io.mcflare.core.McflareProtocol;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -58,7 +58,7 @@ public final class McflareGateway {
         WebSocketServerConnection webSocket = null;
         Socket backend = null;
         try {
-            webSocket = WebSocketServerConnection.accept(client, MinecraftStatusProbe.DEFAULT_PATH);
+            webSocket = WebSocketServerConnection.accept(client, McflareProtocol.PATH, McflareProtocol.SUBPROTOCOL);
             System.out.println("MCFLARE_GATEWAY upgrade cfIpPresent="
                     + (webSocket.header("cf-connecting-ip") != null)
                     + " cfRayPresent=" + (webSocket.header("cf-ray") != null));

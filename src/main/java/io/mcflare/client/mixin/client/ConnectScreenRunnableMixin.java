@@ -1,7 +1,8 @@
 package io.mcflare.client.mixin.client;
 
 import io.mcflare.client.McflareClient;
-import io.mcflare.client.tunnel.TunnelStatus;
+import io.mcflare.client.interfaces.mixin.IConnection;
+import io.mcflare.core.LoopbackCarrier;
 import io.netty.channel.ChannelFuture;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.Connection;
@@ -23,20 +24,16 @@ public class ConnectScreenRunnableMixin {
     private @NotNull ChannelFuture connect(@NotNull InetSocketAddress address,
                                            EventLoopGroupHolder holder,
                                            Connection connection) {
-        TunnelStatus status = McflareClient.TUNNEL_MANAGER.handleConnect(
-                val$hostAndPort.getHost(), val$hostAndPort.getPort(), address);
-        InetSocketAddress target = status.usesMcflare()
-                ? status.runningTunnel().access().tunnelAddress()
-                : address;
-
+        String host = val$hostAndPort.getHost();
+        LoopbackCarrier carrier = McflareClient.ROUTES.prepare(host, val$hostAndPort.getPort(), address,
+                error -> McflareClient.LOGGER.debug("MCflare carrier closed for {}: {}", host, error.toString()));
+        InetSocketAddress target = carrier == null ? address : carrier.getLocalAddress();
         try {
             ChannelFuture future = Connection.connect(target, holder, connection);
-            McflareClient.TUNNEL_MANAGER.prepareConnection(status, connection);
+            if (carrier != null) ((IConnection) connection).setMcflareCarrier(carrier);
             return future;
         } catch (RuntimeException | Error error) {
-            if (status.usesMcflare()) {
-                McflareClient.TUNNEL_MANAGER.closeTunnel(status.runningTunnel());
-            }
+            if (carrier != null) carrier.close();
             throw error;
         }
     }

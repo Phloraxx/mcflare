@@ -44,6 +44,12 @@ public final class Rfc6455Client implements Closeable {
 
     public static Rfc6455Client connect(String host, int port, String path,
                                          int connectTimeoutMs, int readTimeoutMs) throws IOException {
+        return connect(host, port, path, connectTimeoutMs, readTimeoutMs, null);
+    }
+
+    public static Rfc6455Client connect(String host, int port, String path,
+                                         int connectTimeoutMs, int readTimeoutMs,
+                                         String requiredSubprotocol) throws IOException {
         if (host == null || host.trim().isEmpty()) throw new IllegalArgumentException("host");
         if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("path");
 
@@ -60,7 +66,7 @@ public final class Rfc6455Client implements Closeable {
             configureTls(ssl, host);
             ssl.startHandshake();
             Rfc6455Client client = new Rfc6455Client(ssl);
-            client.upgrade(host, port, path);
+            client.upgrade(host, port, path, requiredSubprotocol);
             ssl.setSoTimeout(readTimeoutMs);
             return client;
         } catch (IOException | RuntimeException e) {
@@ -80,7 +86,7 @@ public final class Rfc6455Client implements Closeable {
         ssl.setSSLParameters(parameters);
     }
 
-    private void upgrade(String host, int port, String path) throws IOException {
+    private void upgrade(String host, int port, String path, String requiredSubprotocol) throws IOException {
         byte[] nonce = new byte[16];
         random.nextBytes(nonce);
         String key = Base64.getEncoder().encodeToString(nonce);
@@ -91,6 +97,7 @@ public final class Rfc6455Client implements Closeable {
                 + "Connection: Upgrade\r\n"
                 + "Sec-WebSocket-Key: " + key + "\r\n"
                 + "Sec-WebSocket-Version: 13\r\n"
+                + (requiredSubprotocol == null ? "" : "Sec-WebSocket-Protocol: " + requiredSubprotocol + "\r\n")
                 + "User-Agent: MCflare/0.1\r\n\r\n";
         output.write(request.getBytes(StandardCharsets.US_ASCII));
         output.flush();
@@ -105,6 +112,7 @@ public final class Rfc6455Client implements Closeable {
         String actualAccept = null;
         String upgrade = null;
         String connection = null;
+        String subprotocol = null;
         for (int i = 1; i < lines.length; i++) {
             int colon = lines[i].indexOf(':');
             if (colon <= 0) continue;
@@ -113,10 +121,12 @@ public final class Rfc6455Client implements Closeable {
             if ("sec-websocket-accept".equals(name)) actualAccept = value;
             else if ("upgrade".equals(name)) upgrade = value;
             else if ("connection".equals(name)) connection = value;
+            else if ("sec-websocket-protocol".equals(name)) subprotocol = value;
         }
         if (!expectedAccept.equals(actualAccept)
                 || !"websocket".equalsIgnoreCase(upgrade)
-                || !containsToken(connection, "upgrade")) {
+                || !containsToken(connection, "upgrade")
+                || (requiredSubprotocol != null && !requiredSubprotocol.equals(subprotocol))) {
             throw new IOException("Invalid WebSocket upgrade response");
         }
     }
