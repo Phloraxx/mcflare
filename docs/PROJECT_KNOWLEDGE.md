@@ -504,7 +504,7 @@ MCflare retains the MIT attribution required for code derived from Modflared; se
 
 ## 18. Architecture re-evaluation — 2026-08-30
 
-The preferred v1 architecture is now **Enhanced HTTP/WebSocket as the production default**, with Basic `tcp://` retained as a gatewayless compatibility/minimal mode. Cloudflare documents normal HTTP/WebSocket published applications as clientless, while published raw TCP is documented around client-side `cloudflared`; therefore new MCflare protocol features should be designed around Enhanced HTTP/WSS, not the Basic carrier.
+The preferred v1 architecture is now **normal Cloudflare orange-cloud HTTP/WebSocket proxying as the production default**, with Cloudflare Tunnel retained as an optional way to reach the same HTTP/WebSocket gateway when inbound origin HTTPS is unavailable or intentionally forbidden. The former raw `tcp://` Basic mode remains a proven historical compatibility path but should not define new protocol work. See `LOW_LATENCY_ARCHITECTURE.md` for the latency-first target architecture and migration plan.
 
 ### Recommended protocol simplification (next refactor; not implemented yet)
 
@@ -516,7 +516,9 @@ Enhanced mode should select services by the WebSocket HTTP path instead of multi
 /.well-known/mcflare/v1/stream/<service>     -> reserve only when a real TCP-side-service adapter exists
 ```
 
-For a datagram path, the Enhanced gateway validates the configured service before accepting/using the channel and sends a tiny server-first acknowledgement. The client sends no application bytes before that acknowledgement. This is important for Basic mode: the current named Basic Tunnel was experimentally tested with the proposed voice path; its WebSocket upgrade succeeded but remained byte-silent, so a side-service attempt can timeout/fail closed without injecting control bytes into the Minecraft origin.
+For the Minecraft path, the WebSocket upgrade itself should become discovery: require `Sec-WebSocket-Protocol: mcflare.v1`, and treat a matching `101` response as proof of MCflare. Keep that successful WebSocket as a prepared transport for the actual Minecraft carrier instead of closing it and opening a second connection. This removes Minecraft Status parsing from route discovery and eliminates an avoidable TCP+TLS+WebSocket handshake on the first protected connection.
+
+For a datagram path, the Enhanced gateway validates the configured service before accepting/using the channel and sends a tiny server-first acknowledgement. The client sends no application bytes before that acknowledgement. This is important for legacy Basic mode: the current named Basic Tunnel was experimentally tested with the proposed voice path; its WebSocket upgrade succeeded but remained byte-silent, so a side-service attempt can timeout/fail closed without injecting control bytes into the Minecraft origin.
 
 This makes `HELLO`/capability JSON unnecessary for current SVC behavior. The SVC adapter already knows that it needs service `voicechat` of type datagram, so it should directly attempt that service. The refactor can remove `GatewayControlClient`, capability parsing/futures, `MCF1` magic/opcode dispatch, and the gateway's first-four-byte Minecraft-vs-control sniff. Keep explicit `u16 length + payload` datagram framing: WebSocket frame boundaries are not application record boundaries.
 

@@ -4,11 +4,13 @@ MCflare lets Minecraft clients reach origin-hidden servers through Cloudflare us
 
 **Player goal:** install MCflare once, enter `play.example.com`, join normally.
 
-**Admin goal:** publish one Cloudflare Tunnel hostname. No TXT discovery record, player-side `cloudflared`, WARP, localhost command, or custom launcher is required.
+**Admin goal:** publish one proxied hostname. The preferred next deployment is normal Cloudflare orange-cloud HTTP/WebSocket proxying; Cloudflare Tunnel remains optional for CGNAT/no-public-ingress servers. No TXT discovery record, player-side `cloudflared`, WARP, localhost command, or custom launcher is required.
 
-> Status: experimental. Fabric 26.2 is proven end-to-end. The transport core and Enhanced gateway compile to Java 8 for reuse by legacy and modern loader adapters.
+> Status: experimental. Fabric 26.2 and the current Tunnel/Enhanced implementation are proven end-to-end. The Orange-first low-latency architecture is the next refactor and is documented in `docs/LOW_LATENCY_ARCHITECTURE.md`; it is not yet claimed as benchmarked or production-proven.
 
-## Modes
+## Current proven modes
+
+The table below describes the current implementation. The planned Orange-first refactor converges both deployment methods on the same HTTP/WebSocket gateway and removes the special raw-Tunnel Basic protocol.
 
 | | Basic | Enhanced |
 |---|---|---|
