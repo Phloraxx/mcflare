@@ -27,6 +27,6 @@ The gateway accepts only `/.well-known/mcflare`, terminates WebSocket, and copie
 - With orange-cloud deployment, restrict the gateway origin to Cloudflare/reverse-proxy traffic.
 - Connection count and handshake/frame bounds remain enforced.
 
-## Next latency refactor
+## Discovery and first connection
 
-Use `Sec-WebSocket-Protocol: mcflare.v1` as the discovery proof and keep that successful WSS connection as the actual Minecraft carrier. This removes the separate Minecraft Status discovery connection and one TCP+TLS+WebSocket handshake on first connect.
+MCflare requests `Sec-WebSocket-Protocol: mcflare.v1`. A gateway must echo that subprotocol in its `101` response. That successful WebSocket is immediately retained as the actual Minecraft carrier, so discovery and transport establishment are one operation. Cached positive routes still fail closed if a future MCflare WebSocket cannot be established.

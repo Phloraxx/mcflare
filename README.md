@@ -51,7 +51,7 @@ The player protocol and gateway do not change between Orange and Tunnel.
 - `gateway/` — minimal HTTP/WebSocket-to-Minecraft TCP gateway.
 - root module — current Fabric 26.2 hooks.
 
-The current routing still uses a Minecraft Status probe over WSS for zero-config detection. The next latency refactor will use a dedicated WebSocket subprotocol and retain the successful discovery socket for the real Minecraft connection, removing an avoidable extra handshake. See `docs/LOW_LATENCY_ARCHITECTURE.md`.
+Routing now uses `Sec-WebSocket-Protocol: mcflare.v1` as the zero-config proof. The successful discovery WebSocket is retained as the actual Minecraft carrier, so first connect uses one TCP + TLS + WebSocket establishment rather than a separate probe connection. See `docs/LOW_LATENCY_ARCHITECTURE.md`.
 
 ## Build
 

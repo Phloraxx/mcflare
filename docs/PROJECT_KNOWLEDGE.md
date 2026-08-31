@@ -561,3 +561,13 @@ Consequences implemented on `feature/orange-minecraft-only`:
 Historical SVC-over-MCflare and datagram experiments remain useful evidence but are retired from the intended product. They proved separate-socket proxying is possible; the new scope explicitly chooses not to carry that complexity.
 
 The preferred deployment is normal Cloudflare orange-cloud HTTP/WebSocket proxying. Cloudflare Tunnel remains optional only as an origin-reachability mechanism for CGNAT/no-public-ingress cases; it reaches the same Minecraft-only HTTP/WebSocket gateway. The next latency optimization is prepared-WebSocket discovery: identify MCflare via an explicit WebSocket subprotocol and reuse the successful discovery socket as the actual Minecraft carrier.
+
+## 20. Minecraft-only prepared-WebSocket baseline — 2026-08-31
+
+The Minecraft-only simplification and first-connect latency refactor are now implemented on `feature/orange-minecraft-only`. Active Java source is reduced to four Java-8 core classes (`Rfc6455Client`, `McflareProtocol`, `RouteResolver`, `LoopbackCarrier`), two gateway classes, and the Fabric initializer plus three connection lifecycle hooks.
+
+`MinecraftStatusProbe`, `TunnelManager`, `RunningTunnel`, and `TunnelStatus` were removed. Discovery now requests WebSocket subprotocol `mcflare.v1`; the gateway requires and echoes it. The successful discovery WSS is retained and handed directly to the one-shot loopback carrier for Minecraft, eliminating the former second TCP/TLS/WebSocket handshake. `RouteResolver` now lives in the Java-8 core and a successful secure WSS wins the direct-vs-secure race immediately.
+
+The refactor passed a clean build, Java-8 resolver tests, and a full Minecraft 26.2 join through the named HTTP/Tunnel gateway. The gateway logged one upgrade for the actual join and the Oracle Minecraft server logged `Phlo joined the game`.
+
+A 10-attempt named-Tunnel prepared-handshake sample then produced 9 successes (447, 460, 463, 469, 476, 700, 997, 1309, 2390 ms) and one TCP connect timeout. Treat this only as the current Tunnel path baseline. The product decision remains Orange proxy as the default and Tunnel as optional origin reachability.
