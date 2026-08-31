@@ -24,11 +24,11 @@ Same Mac, same Oracle backend/gateway, 15 samples per route:
 
 | Path | Setup median | Minecraft RTT median | RTT p95 |
 |---|---:|---:|---:|
-| Direct Oracle WSS | 228 ms | 73 ms | 286 ms |
-| True Orange (`hooks.ieeesahrdaya.com`) | 505 ms | 148 ms | 409 ms |
-| Named Tunnel (`mcflare2-test.mulearnscet.in`) | 502 ms | 174 ms | 355 ms |
+| Direct Oracle WSS | 207 ms | 70 ms | 78 ms |
+| Dedicated true Orange (`mcflare-orange-test.mulearnscet.in`) | 571 ms | 144 ms | 610 ms |
+| Named Tunnel (`mcflare2-test.mulearnscet.in`) | 580 ms | 158 ms | 896 ms |
 
-`hooks.ieeesahrdaya.com` was verified absent from every running `cloudflared` ingress before use. Earlier `payment.mulearnscet.in` and `aegissafety.co.in` measurements are excluded because both were later confirmed Tunnel-backed.
+`mcflare-orange-test.mulearnscet.in` is a dedicated proxied A/AAAA hostname and was verified absent from every running `cloudflared` ingress. Earlier `payment.mulearnscet.in` and `aegissafety.co.in` measurements are excluded because both were later confirmed Tunnel-backed. The hostname initially returned Cloudflare `526` until Traefik/ACME issued the origin certificate; WSS and full login passed after certificate propagation.
 
 ## Current scope gates
 

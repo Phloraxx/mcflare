@@ -84,15 +84,15 @@ The valid same-client/same-backend 15-sample comparison was:
 
 | Path | Setup median | Minecraft RTT median | RTT p95 |
 |---|---:|---:|---:|
-| Direct Oracle WSS (`aegis-safety-preview-144-24-114-90.sslip.io`) | 228 ms | 73 ms | 286 ms |
-| True Orange (`hooks.ieeesahrdaya.com`, no cloudflared ingress) | 505 ms | 148 ms | 409 ms |
-| Named Tunnel (`mcflare2-test.mulearnscet.in`) | 502 ms | 174 ms | 355 ms |
+| Direct Oracle WSS (`aegis-safety-preview-144-24-114-90.sslip.io`) | 207 ms | 70 ms | 78 ms |
+| Dedicated true Orange (`mcflare-orange-test.mulearnscet.in`) | 571 ms | 144 ms | 610 ms |
+| Named Tunnel (`mcflare2-test.mulearnscet.in`) | 580 ms | 158 ms | 896 ms |
 
-True Orange improved median gameplay RTT by about 26 ms versus the named Tunnel in this run. Direct remained about 75 ms faster than Orange, so Cloudflare edge/origin routing is still the dominant extra latency on this test network.
+Dedicated true Orange improved median gameplay RTT by about 14 ms versus the named Tunnel in this final run. Direct remained about 74 ms faster than Orange, so Cloudflare edge/origin routing is still the dominant extra latency on this test network. Tail spikes varied substantially between Cloudflare samples, so p95 should be treated as path-quality evidence rather than an MCflare processing cost.
 
 Earlier measurements using `payment.mulearnscet.in` and `aegissafety.co.in` are invalid as Orange measurements: both hostnames were later confirmed in local `cloudflared` ingress configurations and are Tunnel-backed.
 
-The Orange path was additionally proven with a full Minecraft 26.2 login; the real Oracle server logged `Phlo joined the game`. The same Orange WSS path also succeeded under a real Temurin Java 8 runtime.
+The dedicated Orange path was additionally proven with a full Minecraft 26.2 login; the real Oracle server logged `Phlo joined the game`. The same Orange WSS path also succeeded under a real Temurin Java 8 runtime. Immediately after the hostname was created Cloudflare briefly returned `526` until Traefik/ACME had a valid origin certificate; provisioning should verify the `mcflare.v1` WebSocket upgrade before publishing the hostname to players.
 
 ## Interpreting "no lag"
 
