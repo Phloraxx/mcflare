@@ -624,8 +624,14 @@ After the proof, both test `/mcflare` routes were restored to parallel gateway `
 
 ## 23. Direct-server and native IP-ban acceptance — 2026-09-01
 
-The real Fabric 26.1 client with MCflare installed joined `ordinary-minecraft.test:25586`, a clean Fabric server with zero MCflare server mods. Minecraft logged `Player438[/127.0.0.1:33416]` and the player joined normally. This closes ordinary Quick Play/Direct Connect compatibility; the graphical server-list pinger is still a separate UI-path test.
+The real Fabric 26.1 client with MCflare installed joined `ordinary-minecraft.test:25586`, a clean Fabric server with zero MCflare server mods. Minecraft logged `Player438[/127.0.0.1:33416]` and the player joined normally. This closes ordinary Quick Play/Direct Connect compatibility. The actual graphical Multiplayer pinger was subsequently exercised too; see section 24.
 
 The source-IP proof was then strengthened beyond logging. Through true Orange, Minecraft saw `Player393[/144.24.114.90:53422]`. Native `ban-ip 144.24.114.90` immediately kicked that player, and a fresh real MCflare-equipped client was rejected as `Player44 (/144.24.114.90:42538)` because the IP was banned. The address was pardoned afterward and the ban file returned empty.
 
 The temporary `25585/25587` test services were stopped, Orange `/mcflare` was restored to `25588`, and v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel all passed. This confirms that `CF-Connecting-IP -> PROXY v1 -> Connection.address` is sufficient for Minecraft's native IP-ban behavior without custom identity packets.
+
+## 24. Graphical ordinary-server pinger acceptance — 2026-09-01
+
+The real Fabric 26.1 client was launched normally rather than with Quick Play, then the actual title-screen `Multiplayer` button was clicked under Oracle/Xvfb. The disposable profile already contained the ordinary server from the earlier Quick Play test; Quick Play had marked the NBT entry `hidden=1`, so only that test-profile flag was changed to `hidden=0`. The client container also received an explicit test-only hosts mapping `ordinary-minecraft.test -> 127.0.0.1`; no MCflare product source changed.
+
+Minecraft's real `ServerStatusPinger` then opened a loopback TCP connection to `25586`. `/proc/net/tcp6` observed an ephemeral client socket (`B1D4`) to `127.0.0.1:25586` (`63F2`) in `ESTABLISHED` state. The rendered Multiplayer screen showed the saved server as online with `0/20`, green latency bars and MOTD `Ordinary no-MCflare 26.1 regression`. This closes the graphical ordinary-server status-ping regression with MCflare installed.

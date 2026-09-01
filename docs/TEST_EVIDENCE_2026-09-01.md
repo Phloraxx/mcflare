@@ -392,7 +392,7 @@ Player438[/127.0.0.1:33416] logged in
 Player438 joined the game
 ```
 
-The client remained connected until deliberately stopped about a minute later. This proves the rebuilt client does not require MCflare server-side and can choose the ordinary direct Minecraft TCP path when a hostname is not MCflare-enabled. This test does not by itself exercise the graphical multiplayer server-list pinger.
+The client remained connected until deliberately stopped about a minute later. This proves the rebuilt client does not require MCflare server-side and can choose the ordinary direct Minecraft TCP path when a hostname is not MCflare-enabled. The graphical Multiplayer pinger was tested separately below.
 
 ## Native Minecraft IP-ban acceptance through true Orange
 
@@ -413,3 +413,9 @@ Reason: Banned by an operator.
 The test address was pardoned (`Unbanned IP 144.24.114.90`) and `banned-ips.json` returned to `[]`. The isolated server shut down cleanly, Orange `/mcflare` was restored to `25588`, and no `25585/25587` listeners remained. Final v1 Orange/Tunnel Status, both legacy WSS paths, direct production Status and PufferPanel HTTP 200 all passed again.
 
 GitHub Actions run `33496826197` for docs checkpoint `548e839ca257a7f579cd48347c0d907254a65d88` also completed with all seven jobs green.
+
+## Graphical Multiplayer `ServerStatusPinger` ordinary-server regression
+
+The same ordinary Fabric 26.1 server remained on `127.0.0.1:25586` with zero MCflare mods. The real MCflare-equipped client was launched without Quick Play and the actual title-screen `Multiplayer` button was clicked under Xvfb. The pre-existing `servers.dat` entry was made visible by changing only its test-profile NBT `hidden` byte from `1` to `0`; the client container received `ordinary-minecraft.test -> 127.0.0.1` as a test-only hosts entry.
+
+After opening Multiplayer, `/proc/net/tcp6` observed the client pinger connection from ephemeral port `B1D4` to `127.0.0.1:25586` (`63F2`) reach `ESTABLISHED`. The captured Minecraft screen rendered `Minecraft Server`, MOTD `Ordinary no-MCflare 26.1 regression`, `0/20`, and green latency bars. Therefore the actual `ServerStatusPinger` hook falls back to ordinary Minecraft TCP correctly; this is independent of the earlier Quick Play/world-join proof.

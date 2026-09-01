@@ -51,7 +51,7 @@ Implemented/proven:
 - local bind failure is non-fatal to Minecraft;
 - generated `config/mcflare.properties` controls enable/listen/max-connections.
 
-Real rebuilt Fabric 26.1 client full protected login through `/mcflare` is proven on both true Orange and named Tunnel. The same client artifact also joined a clean Fabric 26.1 server with zero MCflare server mods through ordinary direct TCP, proving normal-server compatibility. The graphical server-list pinger remains a separate untested UI hook; optional real-client expansion to other loader/version families also remains.
+Real rebuilt Fabric 26.1 client full protected login through `/mcflare` is proven on both true Orange and named Tunnel. The same client artifact joined a clean Fabric 26.1 server with zero MCflare server mods through ordinary direct TCP, and Minecraft's actual graphical Multiplayer screen successfully pinged that same ordinary server and rendered its MOTD/player count/latency. Normal-server Quick Play/Direct Connect and `ServerStatusPinger` compatibility are therefore proven; optional real-client expansion to other loader/version families remains.
 
 ## Gate 4 - Orange and Tunnel equivalence
 
@@ -94,7 +94,6 @@ Remaining before stable release:
 - chunk-load/teleport burst tests;
 - connection churn and concurrent-client ceiling tests;
 - Cloudflare edge restart/drop behavior observed as clean Minecraft disconnect/reconnect;
-- graphical server-list ping with MCflare installed; real ordinary-server Quick Play/Direct Connect is already proven.
 
 ## Gate 7 - compatibility expansion
 
