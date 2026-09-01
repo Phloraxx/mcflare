@@ -382,3 +382,34 @@ PufferPanel: HTTP 200
 ```
 
 The legacy `25577` gateway retained PID `3784240` with its August 31 start time; the parallel v1 `25588` gateway remained PID `1320893`. No `25585` or `25587` listener remained after cleanup.
+
+## Ordinary-server client regression
+
+A clean Fabric 26.1 server was copied from the standalone test installation, all MCflare mods were removed (`MOD_COUNT=0`), and it listened only on `127.0.0.1:25586` with MOTD `Ordinary no-MCflare 26.1 regression`. The real Fabric 26.1 client still had MCflare installed and used Quick Play to `ordinary-minecraft.test:25586`.
+
+```text
+Player438[/127.0.0.1:33416] logged in
+Player438 joined the game
+```
+
+The client remained connected until deliberately stopped about a minute later. This proves the rebuilt client does not require MCflare server-side and can choose the ordinary direct Minecraft TCP path when a hostname is not MCflare-enabled. This test does not by itself exercise the graphical multiplayer server-list pinger.
+
+## Native Minecraft IP-ban acceptance through true Orange
+
+The isolated Fabric 26.1 server/gateway was started again on `25585/25587`, and only the true-Orange `/mcflare` test route was temporarily moved from `25588` to `25587`. A real Fabric client joined through Cloudflare and Minecraft logged:
+
+```text
+Player393[/144.24.114.90:53422] logged in
+Player393 joined the game
+```
+
+The server console then executed `ban-ip 144.24.114.90`. Minecraft reported that the ban affected the connected player and immediately disconnected it with `You have been IP banned from this server`. A completely fresh real-client launch through the same Orange hostname was then rejected before joining:
+
+```text
+Disconnecting Player44 (/144.24.114.90:42538): Your IP address is banned from this server.
+Reason: Banned by an operator.
+```
+
+The test address was pardoned (`Unbanned IP 144.24.114.90`) and `banned-ips.json` returned to `[]`. The isolated server shut down cleanly, Orange `/mcflare` was restored to `25588`, and no `25585/25587` listeners remained. Final v1 Orange/Tunnel Status, both legacy WSS paths, direct production Status and PufferPanel HTTP 200 all passed again.
+
+GitHub Actions run `33496826197` for docs checkpoint `548e839ca257a7f579cd48347c0d907254a65d88` also completed with all seven jobs green.

@@ -37,7 +37,7 @@ Implemented/proven on the shared Fabric/NeoForge adapter (runtime-tested on both
 - apply parsed source address to Minecraft `Connection.address`;
 - gateway metadata logs indicate presence, not raw visitor IP.
 
-Proven on a real Fabric 26.1 world join through both true Orange and named Tunnel: Minecraft login logs exposed `144.24.114.90`, matching the Oracle client host public IPv4. Remaining: ban/moderation API-level assertions and a live public-IPv6 visitor test when an IPv6 client path is available.
+Proven on real Fabric 26.1 world joins through both true Orange and named Tunnel: Minecraft login logs exposed `144.24.114.90`, matching the Oracle client host public IPv4. A subsequent true-Orange acceptance used Minecraft's native `ban-ip 144.24.114.90`: the connected player was immediately kicked and a fresh real-client reconnect was rejected as IP-banned with the restored address. Remaining: live public-IPv6 visitor testing and any platform-specific moderation integrations beyond Minecraft's native ban list.
 
 ## Gate 3 - dual-side loader artifacts
 
@@ -51,7 +51,7 @@ Implemented/proven:
 - local bind failure is non-fatal to Minecraft;
 - generated `config/mcflare.properties` controls enable/listen/max-connections.
 
-Real rebuilt Fabric 26.1 client full protected login through `/mcflare` is proven on both true Orange and named Tunnel. Remaining: ordinary external/direct-server regression with the rebuilt client installed, plus optional real-client expansion to other loader/version families.
+Real rebuilt Fabric 26.1 client full protected login through `/mcflare` is proven on both true Orange and named Tunnel. The same client artifact also joined a clean Fabric 26.1 server with zero MCflare server mods through ordinary direct TCP, proving normal-server compatibility. The graphical server-list pinger remains a separate untested UI hook; optional real-client expansion to other loader/version families also remains.
 
 ## Gate 4 - Orange and Tunnel equivalence
 
@@ -94,7 +94,7 @@ Remaining before stable release:
 - chunk-load/teleport burst tests;
 - connection churn and concurrent-client ceiling tests;
 - Cloudflare edge restart/drop behavior observed as clean Minecraft disconnect/reconnect;
-- ordinary external server Direct Connect and server-list ping with MCflare installed.
+- graphical server-list ping with MCflare installed; real ordinary-server Quick Play/Direct Connect is already proven.
 
 ## Gate 7 - compatibility expansion
 

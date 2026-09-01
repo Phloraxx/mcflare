@@ -46,6 +46,8 @@
 | Real Fabric 26.1 client Quick Play -> true Orange `/mcflare` -> world join | PASS |
 | Real Fabric 26.1 client Quick Play -> named Tunnel `/mcflare` -> world join | PASS |
 | Minecraft login log exposes restored `CF-Connecting-IP` (`144.24.114.90`) on Orange + Tunnel | PASS |
+| Native Minecraft `ban-ip` immediately kicks restored-IP player and rejects fresh Orange reconnect | PASS |
+| Real MCflare-equipped Fabric 26.1 client -> clean ordinary server with zero MCflare mods | PASS |
 | Final refreshed `25588` gateway: `/mcflare` Orange + Tunnel, legacy paths, and direct production Status | PASS |
 | Java-client reconnect stress, 10/10 Orange + 10/10 Tunnel | PASS |
 | 40 s pre-data Ping/Pong then Status on same socket, Orange + Tunnel | PASS after lazy-backend fix |
@@ -65,10 +67,9 @@ The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and t
 ## Required before stable v1
 
 1. Online-mode/authenticated login through `/mcflare` with a real player account, if stable-v1 acceptance requires Mojang session authentication proof.
-2. Ordinary external server Direct Connect/server-list regression with the rebuilt player artifact installed.
-3. Assert restored player IP in ban/moderation-facing APIs in addition to the now-proven Minecraft login log.
-4. Live public IPv6 visitor-IP restoration when a suitable client route is available.
-5. Sustained gameplay, teleport/chunk bursts and realistic concurrent clients.
-6. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
+2. Exercise the actual graphical server-list pinger against an ordinary non-MCflare server; ordinary Quick Play/Direct Connect is already proven.
+3. Live public IPv6 visitor-IP restoration when a suitable client route is available.
+4. Sustained gameplay, teleport/chunk bursts and realistic concurrent clients.
+5. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
 
 Detailed evidence: `TEST_EVIDENCE_2026-09-01.md` and `BUILD_MATRIX.md`.

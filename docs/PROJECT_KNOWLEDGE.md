@@ -621,3 +621,11 @@ Using source commit `7e542e9354948b41f7d9188627d4f4661484c51e`, Minecraft Quick 
 The gateway reported `realIpPresent=true cfRayPresent=true` on both upgrades. Minecraft logged the client as `144.24.114.90` on both joins, independently matching Oracle's public IPv4. This closes the real-client full-transport and login-log IP proof for true Orange and named Tunnel. The isolated server was intentionally offline-mode; authenticated Mojang online-mode remains a distinct optional/release acceptance gate.
 
 After the proof, both test `/mcflare` routes were restored to parallel gateway `25588`, the temporary `25585/25587` server was stopped, named test cloudflared was restarted, and v1 Orange/Tunnel Status, both legacy WSS paths, direct production Minecraft Status and PufferPanel health all passed. Production `25565` and legacy `25577` were not restarted.
+
+## 23. Direct-server and native IP-ban acceptance — 2026-09-01
+
+The real Fabric 26.1 client with MCflare installed joined `ordinary-minecraft.test:25586`, a clean Fabric server with zero MCflare server mods. Minecraft logged `Player438[/127.0.0.1:33416]` and the player joined normally. This closes ordinary Quick Play/Direct Connect compatibility; the graphical server-list pinger is still a separate UI-path test.
+
+The source-IP proof was then strengthened beyond logging. Through true Orange, Minecraft saw `Player393[/144.24.114.90:53422]`. Native `ban-ip 144.24.114.90` immediately kicked that player, and a fresh real MCflare-equipped client was rejected as `Player44 (/144.24.114.90:42538)` because the IP was banned. The address was pardoned afterward and the ban file returned empty.
+
+The temporary `25585/25587` test services were stopped, Orange `/mcflare` was restored to `25588`, and v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel all passed. This confirms that `CF-Connecting-IP -> PROXY v1 -> Connection.address` is sufficient for Minecraft's native IP-ban behavior without custom identity packets.
