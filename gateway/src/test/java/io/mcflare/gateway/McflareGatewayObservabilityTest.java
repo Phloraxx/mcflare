@@ -77,6 +77,7 @@ class McflareGatewayObservabilityTest {
             String capacity = findLog(info, "event=capacity-reject");
             assertTrue(capacity.contains("active=1"));
             assertTrue(capacity.contains("maxConnections=1"));
+            waitForLog(info, "event=upgrade");
             String upgrade = findLog(info, "event=upgrade");
             assertTrue(upgrade.contains("cfRay=invalid"), upgrade);
             assertFalse(upgrade.contains("bad ray value"), upgrade);
