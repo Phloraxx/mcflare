@@ -91,10 +91,11 @@ The local TCP hop keeps Minecraft seeing an ordinary TCP connection and leaves t
 - Both live Cloudflare paths delivered visitor-IP and Ray metadata to the gateway.
 - Real Fabric 26.1 Minecraft client Quick Play joined a world through true Orange `/mcflare` and named Tunnel `/mcflare`.
 - Both real joins restored `144.24.114.90` into Minecraft's login log, matching the Oracle client host public IPv4.
+- A real Fabric 26.1 true-Orange session remained on one WSS/login connection for 31m27s and survived seven distant fresh-chunk teleports over 5m07s without a transport reconnect; final health/online checks remained good.
 
 ## Remaining release gates
 
-Real rebuilt Fabric 26.1 player login/world join through `/mcflare` is proven on both true Orange and named Tunnel, including restored IP visibility in Minecraft login logs. Minecraft's native `ban-ip` also acts on that restored address and rejects a fresh Cloudflare-routed reconnect. The same MCflare-equipped client joins an ordinary zero-MCflare server through normal TCP, and the actual graphical Multiplayer server-list pinger successfully resolves and renders that ordinary server. Remaining before stable release: authenticated online-mode proof if required, sustained gameplay/jitter, realistic concurrent clients, and public-IPv6 visitor validation. Fabric/NeoForge server-side loader/version gates for 1.21.11/26.1/26.2 are complete.
+Real rebuilt Fabric 26.1 player login/world join through `/mcflare` is proven on both true Orange and named Tunnel, including restored IP visibility in Minecraft login logs. Minecraft's native `ban-ip` also acts on that restored address and rejects a fresh Cloudflare-routed reconnect. The same MCflare-equipped client joins an ordinary zero-MCflare server through normal TCP, and the actual graphical Multiplayer server-list pinger successfully resolves and renders that ordinary server. Remaining before stable release: authenticated online-mode proof if required, 30+ minutes of active gameplay with latency/jitter characterization, realistic concurrent clients, edge-drop/restart behavior, and public-IPv6 visitor validation. The fresh-chunk teleport-burst stability gate is complete. Fabric/NeoForge server-side loader/version gates for 1.21.11/26.1/26.2 are complete.
 
 ## Lazy backend connection
 

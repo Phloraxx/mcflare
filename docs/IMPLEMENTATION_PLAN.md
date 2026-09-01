@@ -85,13 +85,14 @@ Current state:
 - full rebuilt Fabric 26.1 client login/world join through true Orange `/mcflare`: PASS;
 - full rebuilt Fabric 26.1 client login/world join through named Tunnel `/mcflare`: PASS;
 - Minecraft login log real-IP restoration on both paths: PASS;
+- true-Orange long-lived transport session: PASS — one real Fabric 26.1 client stayed on one WSS/login session for 31m27s until deliberate shutdown;
+- fresh-chunk/teleport burst stability: PASS — seven high-altitude distant teleports over 5m07s, with repeated multi-second world-generation stalls and no MCflare reconnect/disconnect;
 - the acceptance server was offline-mode, so authenticated Mojang online-mode login remains unproven.
 
 Remaining before stable release:
 
 - online-mode/authenticated client proof if required for release acceptance;
-- 30+ minute gameplay sessions;
-- chunk-load/teleport burst tests;
+- 30+ minute active-gameplay session with latency/jitter characterization;
 - connection churn and concurrent-client ceiling tests;
 - Cloudflare edge restart/drop behavior observed as clean Minecraft disconnect/reconnect;
 
@@ -111,7 +112,7 @@ Next order:
 
 1. Ordinary external-server regression and, if required, authenticated online-mode proof with the rebuilt client.
 2. Ban/moderation API visibility for the already-proven restored login address.
-3. Sustained gameplay/concurrency and public IPv6 edge testing.
+3. 30+ minute active gameplay/jitter characterization, realistic concurrency, edge-drop behavior and public IPv6 testing.
 4. Optional real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets.
 
 Never fork RFC6455/discovery/gateway logic per loader.

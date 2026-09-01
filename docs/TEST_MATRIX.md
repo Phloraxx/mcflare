@@ -49,6 +49,7 @@
 | Native Minecraft `ban-ip` immediately kicks restored-IP player and rejects fresh Orange reconnect | PASS |
 | Real MCflare-equipped Fabric 26.1 client -> clean ordinary server with zero MCflare mods | PASS |
 | Actual graphical Multiplayer `ServerStatusPinger` -> same ordinary server, visible MOTD/count/latency | PASS |
+| Real Fabric 26.1 true-Orange session: 31m27s connected; seven distant fresh-chunk teleports in 5m07s; one WSS upgrade/login and no spontaneous reconnect | PASS |
 | Final refreshed `25588` gateway: `/mcflare` Orange + Tunnel, legacy paths, and direct production Status | PASS |
 | Java-client reconnect stress, 10/10 Orange + 10/10 Tunnel | PASS |
 | 40 s pre-data Ping/Pong then Status on same socket, Orange + Tunnel | PASS after lazy-backend fix |
@@ -69,7 +70,7 @@ The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and t
 
 1. Online-mode/authenticated login through `/mcflare` with a real player account, if stable-v1 acceptance requires Mojang session authentication proof.
 2. Live public IPv6 visitor-IP restoration when a suitable client route is available.
-3. Sustained gameplay, teleport/chunk bursts and realistic concurrent clients.
+3. 30+ minutes of active gameplay/latency-jitter characterization and realistic concurrent clients; the fresh-chunk teleport-burst stability gate is complete.
 4. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
 
 Detailed evidence: `TEST_EVIDENCE_2026-09-01.md` and `BUILD_MATRIX.md`.

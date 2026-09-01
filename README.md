@@ -123,7 +123,7 @@ Start with:
 
 ## Status
 
-Experimental. One loader-neutral Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11/26.x; the Fabric artifacts are also runtime-proven unchanged on Quilt. Paper and Purpur use one Java-21 plugin JAR across 1.21.11, 26.1.2 and 26.2 with native PROXY support. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed Status-level integration tests. Full authenticated player gameplay remains before stable v1.
+Experimental. One loader-neutral Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11/26.x; the Fabric artifacts are also runtime-proven unchanged on Quilt. Paper and Purpur use one Java-21 plugin JAR across 1.21.11, 26.1.2 and 26.2 with native PROXY support. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed real-client world joins; true Orange has also passed a 31m27s single-session/fresh-chunk burst stability run. Authenticated Mojang online-mode proof and the remaining concurrency/IPv6/long-duration characterization gates remain before stable v1.
 
 ## Attribution
 
