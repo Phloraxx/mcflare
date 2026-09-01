@@ -428,7 +428,7 @@ The first exploratory teleport placed the survival player unsafely and it later 
 
 The controlled burst phase ran for 5m07s, from 14:32:43 through 14:37:50. Seven high-altitude teleports forced fresh-region generation at approximately `(2000,2000)`, `(6000,-6000)`, `(-12000,8000)`, `(24000,24000)`, `(-32000,-16000)`, `(48000,12000)`, and `(-64000,64000)`. The isolated Oracle server reported world-generation stalls of roughly 3.3-6.9 seconds after several jumps, while the client stayed connected and Minecraft continued reporting the player online at 20.0 health.
 
-This proves stability of the existing WSS byte-stream transport under repeated heavy fresh-chunk bursts. It is not a gameplay-latency or jitter benchmark; a 30+ minute actively played session with latency/jitter characterization remains a separate release-quality measurement.
+This proves stability of the existing WSS byte-stream transport under repeated heavy fresh-chunk bursts. It is not itself a gameplay-latency or jitter benchmark; that separate 30-minute active-gameplay measurement was subsequently completed on 2026-09-02 and is recorded later in this document.
 
 After the run, both test `/mcflare` routes were restored from the temporary integrated gateway on `25587` to the normal parallel gateway on `25588`; only the named test cloudflared connector was restarted. The disposable client exited normally and the isolated `25585/25587` server shut down cleanly. Final regression checks passed: v1 Orange `/mcflare` 105-byte Status, v1 named Tunnel `/mcflare` 105-byte Status, both legacy `/.well-known/mcflare` paths, direct production `127.0.0.1:25565` Status, and PufferPanel HTTP 200. No `25585` or `25587` listener remained; legacy `25577` retained its original August 31 process and `25588` retained its existing process.
 
@@ -523,3 +523,18 @@ A fresh-client recovery had already been proven in the immediately preceding pre
 After both runs, Orange was restored byte-for-byte from the saved configuration to `10.0.0.18:25588`, all disposable client containers/networks were removed, and the isolated Fabric server stopped cleanly. Final Java RFC6455 Status checks returned the normal 105-byte production response on both true Orange and the named Tunnel; `25585/25587` were clear and the original long-lived `25577` and `25588` gateway PIDs were unchanged.
 
 This is a client-network black-hole test, not a Cloudflare edge outage/restart. A true Cloudflare-edge interruption remains a distinct release-quality resilience gate.
+
+## 30-minute active-gameplay latency and jitter acceptance (2026-09-02 IST)
+
+The previously open sustained active-gameplay latency/jitter gate was completed without changing production routing or replacing the long-lived production listeners. The accepted run lasted `1801.449 s` (30.02 minutes) for 120 measurement cycles. Each cycle sampled both public delivery paths while the real Fabric 26.1 gameplay client remained online. All `240/240` public probes completed successfully, there were zero route mismatches, and the gameplay WSS connection count remained exactly one on every cycle; no spontaneous gameplay reconnect was observed.
+
+| Path | Mean RTT | p50 | p95 | Max |
+|---|---:|---:|---:|---:|
+| True Orange | 155.58 ms | 145.57 ms | 187.57 ms | 451.25 ms |
+| Named Tunnel | 164.34 ms | 154.36 ms | 197.85 ms | 447.76 ms |
+
+All ten analysis windows were complete (`incomplete=0`). Excluding the warm-up window, Orange window p50 stayed between `143.85` and `150.64 ms`, with the highest observed window p95 at `213.79 ms`. Named Tunnel window p50 stayed between `151.16` and `156.46 ms`, with the highest observed window p95 at `224.65 ms`. These figures describe the tested Oracle/client/network conditions; they are not universal latency guarantees.
+
+Host telemetry over the gameplay sampling interval showed about `14.03%` interruptible CPU and `85.97%` idle CPU; the recorded host CPU peak occurred before the accepted run. This is useful host-load context, not a dedicated-server capacity claim. Higher-scale real-gameplay concurrency/churn remains a separate gate.
+
+Post-run housekeeping/regressions passed for v1 true Orange `/mcflare`, v1 named Tunnel `/mcflare`, direct production Minecraft Status on `127.0.0.1:25565`, and PufferPanel HTTPS. The already-retired legacy endpoints continued their expected responses: the old `25577` production path returned HTTP 400 and the test `/.well-known/mcflare` paths returned HTTP 404. No rollback or production listener replacement was required.

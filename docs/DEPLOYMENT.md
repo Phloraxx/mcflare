@@ -25,6 +25,62 @@ Host(play.example.com) && Path(/mcflare)
 
 The reverse proxy owns public TLS. MCflare does not need a certificate. Keep HTTP/1.1 WebSocket upgrade behavior to the local gateway; there is no need for MCflare to implement HTTP/2 origin serving.
 
+### Traefik
+
+Traefik supports WebSocket upgrades without a WebSocket-specific middleware. A file-provider example is:
+
+```yaml
+http:
+  routers:
+    mcflare:
+      rule: 'Host(`play.example.com`) && Path(`/mcflare`)'
+      entryPoints:
+        - websecure
+      service: mcflare
+      tls: {}
+  services:
+    mcflare:
+      loadBalancer:
+        servers:
+          - url: http://mcflare-gateway:25577
+```
+
+Replace `mcflare-gateway:25577` with the private address Traefik can actually reach. If Traefik runs in a container, `127.0.0.1` refers to that container rather than the Minecraft host unless they share the same network namespace.
+
+### Caddy
+
+Caddy's `reverse_proxy` handles the WebSocket upgrade automatically:
+
+```caddyfile
+play.example.com {
+    @mcflare path /mcflare
+    reverse_proxy @mcflare 127.0.0.1:25577
+}
+```
+
+Use a private/container-network hostname instead of `127.0.0.1` when Caddy and MCflare do not share a host/network namespace.
+
+### NGINX
+
+NGINX requires the WebSocket hop-by-hop upgrade headers to be forwarded explicitly:
+
+```nginx
+location = /mcflare {
+    proxy_pass http://127.0.0.1:25577;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    proxy_set_header CF-Connecting-IP $http_cf_connecting_ip;
+    proxy_set_header CF-Connecting-IPv6 $http_cf_connecting_ipv6;
+    proxy_set_header CF-Ray $http_cf_ray;
+}
+```
+
+The `CF-*` headers above must be trusted only when this origin path is reachable through controlled Cloudflare ingress. A directly reachable origin allows arbitrary clients to supply look-alike forwarding headers; firewall/private-bind the origin accordingly.
+
 ## Mode B: Cloudflare Tunnel
 
 Use when inbound 443/reverse-proxy access is unavailable or intentionally avoided.
@@ -109,6 +165,18 @@ McflareGateway <listen-host:port> <minecraft-host:port> [max-connections] [proxy
 - Tunnel remains managed externally; no Tunnel token goes in MCflare config.
 - Keep old test routes separate during migrations; path-specific rules make side-by-side validation possible.
 
+## Gateway operational logging
+
+The gateway emits small structured operational events suitable for platform logs:
+
+- `event=listen`: configured listener/backend, connection ceiling and PROXY-mode state;
+- `event=upgrade`: monotonic per-process session ID, forwarded-IP **presence only**, and a sanitized Cloudflare Ray identifier when present;
+- `event=close`: the same session ID, duration in milliseconds and one termination reason;
+- `event=capacity-reject`: current full-capacity count and configured ceiling;
+- `event=error`: session ID plus failure stage and exception type.
+
+The gateway intentionally does not write the raw forwarded player address to these operational events. Invalid or control-character-bearing CF-Ray values are reduced to `invalid` rather than copied into logs.
+
 ## Operational validation
 
 A healthy deployment must pass:
@@ -126,3 +194,6 @@ A healthy deployment must pass:
 - Local ingress configuration: https://developers.cloudflare.com/tunnel/advanced/local-management/configuration-file/
 - Published application protocols: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/protocols/
 - Cloudflare WebSockets: https://developers.cloudflare.com/network/websockets/
+- Traefik WebSocket guide: https://doc.traefik.io/traefik/user-guides/websocket/
+- Caddy `reverse_proxy`: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy
+- NGINX WebSocket proxying: https://nginx.org/en/docs/http/websocket.html

@@ -90,12 +90,12 @@ Current state:
 - realistic real-client concurrency: PASS — three simultaneous Fabric 26.1 clients (two Orange, one named Tunnel), three WSS/backend streams, separate-region chunk loads, and a named-Tunnel client replacement while the two Orange sessions stayed connected;
 - named-Tunnel local connector restart recovery: PASS — an in-world real client disconnected cleanly when the test `cloudflared` connector restarted, all gateway/backend sockets closed, and a fresh real client rejoined after connector recovery;
 - true-Orange client-network black-hole teardown/recovery: PASS — removing only the live client container network disconnected the player, the hardened gateway closed both backend and WSS sides, no `25585/25587` socket remained, and fresh-client recovery is proven;
+- 30-minute active-gameplay latency/jitter characterization: PASS — 1801.449 seconds, 120 cycles/240 probes, 240/240 successful, zero route mismatches, player online throughout, and exactly one gameplay WSS connection per cycle. True Orange measured mean/p50/p95/max 155.58/145.57/187.57/451.25 ms; named Tunnel measured 164.34/154.36/197.85/447.76 ms;
 - the acceptance server was offline-mode, so authenticated Mojang online-mode login remains unproven.
 
 Remaining before stable release:
 
 - online-mode/authenticated client proof if required for release acceptance;
-- 30+ minute active-gameplay session with latency/jitter characterization;
 - higher-scale connection-churn/ceiling characterization beyond the proven three-real-client scenario;
 - actual Cloudflare-edge interruption behavior remains distinct from both the proven local `cloudflared` connector restart and the proven client-network black-hole test;
 
@@ -114,7 +114,7 @@ Fabric and NeoForge version-branch reduction is now proven:
 Next order:
 
 1. If required for stable-v1 acceptance, authenticated Mojang online-mode proof with the rebuilt client.
-2. 30+ minute active gameplay latency/jitter characterization and higher-scale real-gameplay load/churn characterization.
+2. Higher-scale real-gameplay load/churn characterization beyond the proven three-client and public-WSS stress gates.
 3. Actual Cloudflare-edge interruption behavior; local connector restart and client-network black-hole behavior are already proven separately.
 4. Optional real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets.
 
@@ -122,12 +122,12 @@ Never fork RFC6455/discovery/gateway logic per loader.
 
 ## Gate 8 - operational hardening
 
-- Document Orange reverse-proxy snippets for Traefik, Caddy and Nginx.
-- Document named Tunnel ingress example.
-- Optional Authenticated Origin Pulls/firewall guidance for Orange.
-- Keep gateway connection/header/frame bounds.
-- Avoid browser Challenge/Access login on `/mcflare`.
-- Log CF-Ray, route type only in infrastructure docs, duration, close reason, and capacity events; avoid unnecessary raw player-IP logging.
+- PASS — concrete Orange reverse-proxy snippets are documented for Traefik, Caddy and NGINX.
+- PASS — named Tunnel HTTP ingress remains documented as the same `/mcflare` gateway path.
+- Optional Authenticated Origin Pulls/firewall guidance for Orange remains infrastructure hardening, not a wire-protocol requirement.
+- PASS — gateway connection/header/frame bounds remain enforced.
+- PASS — deployment guidance explicitly avoids browser Challenge/Access login on `/mcflare`.
+- PASS — gateway logs sanitized CF-Ray correlation, per-session duration/termination reason and capacity-rejection events while logging only a boolean for forwarded player-IP presence, never the raw forwarded address.
 
 ## Gate 9 - CI/release packaging
 

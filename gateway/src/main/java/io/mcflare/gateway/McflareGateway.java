@@ -12,7 +12,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /** Minimal HTTP/WebSocket gateway: one MCflare stream maps to one Minecraft TCP stream. */
@@ -22,10 +25,12 @@ public final class McflareGateway implements Closeable {
     private final InetSocketAddress listen;
     private final InetSocketAddress minecraft;
     private final Semaphore connectionSlots;
+    private final int maxConnections;
     private final boolean proxyProtocol;
     private final Consumer<String> infoLog;
     private final Consumer<String> errorLog;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final AtomicLong sessionSequence = new AtomicLong(1L);
     private volatile ServerSocket listener;
 
     private McflareGateway(InetSocketAddress listen, InetSocketAddress minecraft,
@@ -34,6 +39,7 @@ public final class McflareGateway implements Closeable {
         this.listen = listen;
         this.minecraft = minecraft;
         this.connectionSlots = new Semaphore(maxConnections);
+        this.maxConnections = maxConnections;
         this.proxyProtocol = proxyProtocol;
         this.infoLog = infoLog;
         this.errorLog = errorLog;
@@ -73,8 +79,8 @@ public final class McflareGateway implements Closeable {
         ServerSocket server = new ServerSocket();
         server.bind(listen);
         listener = server;
-        infoLog.accept("MCFLARE_GATEWAY listen=" + listen + " minecraft=" + minecraft
-                + " maxConnections=" + connectionSlots.availablePermits() + " proxyProtocol=" + proxyProtocol);
+        infoLog.accept("MCFLARE_GATEWAY event=listen listen=" + listen + " minecraft=" + minecraft
+                + " maxConnections=" + maxConnections + " proxyProtocol=" + proxyProtocol);
     }
 
     private void runLoop() {
@@ -83,12 +89,15 @@ public final class McflareGateway implements Closeable {
             try {
                 client = listener.accept();
                 if (!connectionSlots.tryAcquire()) {
+                    infoLog.accept("MCFLARE_GATEWAY event=capacity-reject active=" + maxConnections
+                            + " maxConnections=" + maxConnections);
                     rejectBusy(client);
                     continue;
                 }
                 final Socket accepted = client;
+                final long sessionId = sessionSequence.getAndIncrement();
                 Thread thread = new Thread(() -> {
-                    try { handle(accepted); }
+                    try { handle(accepted, sessionId); }
                     finally { connectionSlots.release(); }
                 }, "mcflare-gateway-" + accepted.getPort());
                 thread.setDaemon(true);
@@ -100,23 +109,31 @@ public final class McflareGateway implements Closeable {
         }
     }
 
-    private void handle(Socket client) {
+    private void handle(Socket client, long sessionId) {
+        long startedNanos = System.nanoTime();
+        AtomicReference<String> termination = new AtomicReference<String>("unknown");
+        String stage = "upgrade";
         WebSocketServerConnection webSocket = null;
         Socket backend = null;
         try {
             webSocket = WebSocketServerConnection.accept(client, McflareProtocol.PATH, McflareProtocol.SUBPROTOCOL);
             String clientIp = realClientIp(webSocket);
-            String cfRay = webSocket.header("cf-ray");
-            infoLog.accept("MCFLARE_GATEWAY upgrade realIpPresent=" + (clientIp != null)
-                    + " cfRayPresent=" + (cfRay != null));
+            String cfRay = safeCfRay(webSocket.header("cf-ray"));
+            infoLog.accept("MCFLARE_GATEWAY session=" + sessionId + " event=upgrade realIpPresent="
+                    + (clientIp != null) + " cfRay=" + cfRay);
 
             // Do not open Minecraft until the first application bytes arrive.
             // WebSocket Ping/Pong used during discovery must not consume a backend
             // connection or trip Minecraft's pre-handshake read timeout.
+            stage = "pre-backend";
             byte[] firstData = new byte[64 * 1024];
             int firstRead = webSocket.read(firstData, 0, firstData.length);
-            if (firstRead < 0) return;
+            if (firstRead < 0) {
+                termination.compareAndSet("unknown", "client-close-before-backend");
+                return;
+            }
 
+            stage = "backend-connect";
             backend = connectTcp(minecraft);
             OutputStream backendOut = backend.getOutputStream();
             if (proxyProtocol && clientIp != null) {
@@ -126,22 +143,34 @@ public final class McflareGateway implements Closeable {
             backendOut.write(firstData, 0, firstRead);
             backendOut.flush();
 
+            stage = "stream";
             final WebSocketServerConnection activeWebSocket = webSocket;
             final Socket activeBackend = backend;
             Thread downstream = startPipeThread(activeBackend.getInputStream(),
-                    new WebSocketOutput(activeWebSocket), "mcflare-minecraft-downstream",
+                    new WebSocketOutput(activeWebSocket), "mcflare-minecraft-downstream", termination,
                     activeBackend, activeWebSocket);
-            try { pipe(new WebSocketInput(activeWebSocket), backendOut); }
-            finally {
+            try {
+                pipe(new WebSocketInput(activeWebSocket), backendOut);
+                termination.compareAndSet("unknown", "client-eof");
+            } finally {
                 closeQuietly(activeBackend);
                 joinQuietly(downstream);
             }
         } catch (Exception error) {
-            if (!(error instanceof EOFException)) errorLog.accept("MCFLARE_GATEWAY connection error: " + error);
+            boolean firstTermination = termination.compareAndSet("unknown", stage + "-error");
+            if (firstTermination && !(error instanceof EOFException)) {
+                errorLog.accept("MCFLARE_GATEWAY session=" + sessionId + " event=error stage=" + stage
+                        + " type=" + error.getClass().getSimpleName());
+            }
         } finally {
             closeQuietly(backend);
             closeQuietly(webSocket);
             closeQuietly(client);
+            if (webSocket != null) {
+                long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
+                infoLog.accept("MCFLARE_GATEWAY session=" + sessionId + " event=close durationMs="
+                        + durationMs + " reason=" + termination.get());
+            }
         }
     }
 
@@ -156,6 +185,18 @@ public final class McflareGateway implements Closeable {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private static String safeCfRay(String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) return "absent";
+        if (trimmed.length() > 128) return "invalid";
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '-')) return "invalid";
+        }
+        return trimmed;
+    }
+
     private static int nonZeroPort(int port) { return port > 0 ? port : 1; }
 
     private static Socket connectTcp(InetSocketAddress target) throws IOException {
@@ -167,11 +208,14 @@ public final class McflareGateway implements Closeable {
     }
 
     private static Thread startPipeThread(InputStream input, OutputStream output, String name,
-                                          Closeable... closeables) {
+                                          AtomicReference<String> termination, Closeable... closeables) {
         Thread thread = new Thread(() -> {
-            try { pipe(input, output); }
-            catch (IOException ignored) {}
-            finally {
+            try {
+                pipe(input, output);
+                termination.compareAndSet("unknown", "backend-eof");
+            } catch (IOException ignored) {
+                termination.compareAndSet("unknown", "backend-io-error");
+            } finally {
                 for (Closeable closeable : closeables) closeQuietly(closeable);
             }
         }, name);
