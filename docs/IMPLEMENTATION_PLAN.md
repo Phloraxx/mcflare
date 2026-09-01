@@ -37,7 +37,7 @@ Implemented/proven on the shared Fabric/NeoForge adapter (runtime-tested on both
 - apply parsed source address to Minecraft `Connection.address`;
 - gateway metadata logs indicate presence, not raw visitor IP.
 
-Remaining: login/log/API-level assertion that downstream ban/logging surfaces expose the restored IP; IPv6 live test when an IPv6 client path is available.
+Proven on a real Fabric 26.1 world join through both true Orange and named Tunnel: Minecraft login logs exposed `144.24.114.90`, matching the Oracle client host public IPv4. Remaining: ban/moderation API-level assertions and a live public-IPv6 visitor test when an IPv6 client path is available.
 
 ## Gate 3 - dual-side loader artifacts
 
@@ -51,7 +51,7 @@ Implemented/proven:
 - local bind failure is non-fatal to Minecraft;
 - generated `config/mcflare.properties` controls enable/listen/max-connections.
 
-Remaining: ordinary direct server regression using the rebuilt artifact on a real client and full protected login through `/mcflare`.
+Real rebuilt Fabric 26.1 client full protected login through `/mcflare` is proven on both true Orange and named Tunnel. Remaining: ordinary external/direct-server regression with the rebuilt client installed, plus optional real-client expansion to other loader/version families.
 
 ## Gate 4 - Orange and Tunnel equivalence
 
@@ -61,7 +61,9 @@ Proven 2026-09-01:
 - named HTTP Tunnel `/mcflare` -> same standalone gateway -> production Minecraft Status;
 - true Orange `/mcflare` -> integrated Fabric gateway -> PROXY -> dev Minecraft Status;
 - named HTTP Tunnel `/mcflare` -> same integrated Fabric gateway -> PROXY -> dev Minecraft Status;
-- both delivery modes supplied Cloudflare IP/Ray headers to the same gateway implementation.
+- real Fabric 26.1 Minecraft client -> true Orange `/mcflare` -> full login/world join;
+- the same real client path -> named Tunnel `/mcflare` -> full login/world join;
+- both full joins supplied Cloudflare IP/Ray metadata and restored the same original client IPv4 in Minecraft's login log.
 
 Quick Tunnel was excluded as an acceptance control after a registered/healthy disposable connector repeatedly returned Cloudflare 404/500 before reaching the gateway. Named Tunnel is the canonical Tunnel test.
 
@@ -78,15 +80,21 @@ Before commit/cutover:
 
 ## Gate 6 - full gameplay
 
-Required before stable release:
+Current state:
 
-- full online-mode 26.2 login through true Orange `/mcflare`;
-- full online-mode 26.2 login through named Tunnel `/mcflare`;
+- full rebuilt Fabric 26.1 client login/world join through true Orange `/mcflare`: PASS;
+- full rebuilt Fabric 26.1 client login/world join through named Tunnel `/mcflare`: PASS;
+- Minecraft login log real-IP restoration on both paths: PASS;
+- the acceptance server was offline-mode, so authenticated Mojang online-mode login remains unproven.
+
+Remaining before stable release:
+
+- online-mode/authenticated client proof if required for release acceptance;
 - 30+ minute gameplay sessions;
 - chunk-load/teleport burst tests;
 - connection churn and concurrent-client ceiling tests;
 - Cloudflare edge restart/drop behavior observed as clean Minecraft disconnect/reconnect;
-- ordinary server Direct Connect and server-list ping with MCflare installed.
+- ordinary external server Direct Connect and server-list ping with MCflare installed.
 
 ## Gate 7 - compatibility expansion
 
@@ -102,10 +110,10 @@ Fabric and NeoForge version-branch reduction is now proven:
 
 Next order:
 
-1. Real player full-login/gameplay proof for rebuilt Fabric/Quilt and/or NeoForge client artifacts.
-2. Real player IP visibility in login/logging/ban APIs, not only Status-level transport.
+1. Ordinary external-server regression and, if required, authenticated online-mode proof with the rebuilt client.
+2. Ban/moderation API visibility for the already-proven restored login address.
 3. Sustained gameplay/concurrency and public IPv6 edge testing.
-4. Demand-driven older Minecraft/Forge targets.
+4. Optional real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets.
 
 Never fork RFC6455/discovery/gateway logic per loader.
 

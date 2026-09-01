@@ -610,4 +610,14 @@ Real visitor IP is now a v1 requirement. Cloudflare's `CF-Connecting-IP` / `CF-C
 
 Oracle reconstruction from handoff commit `747fc9f88254d87451e6df8a38521d518a845a6f` passed a Java-25 clean build, local synthetic source-IP/PROXY Status, true Orange `/mcflare` Status, named Tunnel `/mcflare` Status, and combined live Cloudflare -> PROXY -> integrated Fabric Status for both ingress modes. Legacy routes and direct production/dev Minecraft remained healthy. Quick Tunnel was excluded after repeated edge 404/500 responses that never reached origin despite a healthy registered connector.
 
-See `TEST_EVIDENCE_2026-09-01.md` for exact proof and `IMPLEMENTATION_PLAN.md` for remaining full-login/release gates.
+See `TEST_EVIDENCE_2026-09-01.md` for exact proof and `IMPLEMENTATION_PLAN.md` for the remaining release gates. The same day, the rebuilt Fabric 26.1 real client subsequently closed the `/mcflare` world-join gate on both Orange and named Tunnel; see the following section.
+
+## 22. Oracle real-client `/mcflare` acceptance — 2026-09-01
+
+A real Minecraft client no longer requires the Mac test host. An isolated ARM64 Ubuntu Docker image on Oracle runs OpenJDK 25 + Xvfb + Mesa llvmpipe/OpenGL 4.5 and successfully launches the actual Fabric 26.1 Minecraft client. This environment is acceptance-test infrastructure only.
+
+Using source commit `7e542e9354948b41f7d9188627d4f4661484c51e`, Minecraft Quick Play joined an isolated Fabric 26.1 server through `mcflare-orange-test.mulearnscet.in` and then `mcflare2-test.mulearnscet.in`. Both paths used `/mcflare` + `mcflare.v1`, the real client Mixins/RouteResolver/LoopbackCarrier, Cloudflare, the integrated gateway, PROXY v1 and the normal Minecraft login/configuration/game phases. Both reached `joined the game`.
+
+The gateway reported `realIpPresent=true cfRayPresent=true` on both upgrades. Minecraft logged the client as `144.24.114.90` on both joins, independently matching Oracle's public IPv4. This closes the real-client full-transport and login-log IP proof for true Orange and named Tunnel. The isolated server was intentionally offline-mode; authenticated Mojang online-mode remains a distinct optional/release acceptance gate.
+
+After the proof, both test `/mcflare` routes were restored to parallel gateway `25588`, the temporary `25585/25587` server was stopped, named test cloudflared was restarted, and v1 Orange/Tunnel Status, both legacy WSS paths, direct production Minecraft Status and PufferPanel health all passed. Production `25565` and legacy `25577` were not restarted.

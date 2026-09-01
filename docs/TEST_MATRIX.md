@@ -43,6 +43,9 @@
 | True Orange `/mcflare` -> integrated Fabric/PROXY -> dev Status | PASS |
 | Named HTTP Tunnel `/mcflare` -> integrated Fabric/PROXY -> dev Status | PASS |
 | Actual Java `Rfc6455Client` Status over `/mcflare`, Orange + Tunnel | PASS |
+| Real Fabric 26.1 client Quick Play -> true Orange `/mcflare` -> world join | PASS |
+| Real Fabric 26.1 client Quick Play -> named Tunnel `/mcflare` -> world join | PASS |
+| Minecraft login log exposes restored `CF-Connecting-IP` (`144.24.114.90`) on Orange + Tunnel | PASS |
 | Final refreshed `25588` gateway: `/mcflare` Orange + Tunnel, legacy paths, and direct production Status | PASS |
 | Java-client reconnect stress, 10/10 Orange + 10/10 Tunnel | PASS |
 | 40 s pre-data Ping/Pong then Status on same socket, Orange + Tunnel | PASS after lazy-backend fix |
@@ -55,19 +58,17 @@
 | PufferPanel after named Tunnel connector restart | PASS — HTTP 200 |
 | Quick Tunnel as regression control | INVALID/EXCLUDED — Cloudflare 404/500 before origin |
 
-## Prior full-login evidence
+## Full-client evidence
 
-The pre-v1-path checkpoint already proved full Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. The new `/mcflare` transport has independently passed the same RFC6455/Status path and Java-client tests, but full authenticated gameplay must be repeated before stable v1.
+The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. On 2026-09-01 the rebuilt v1 Fabric 26.1 client was then launched as the real Minecraft client under ARM64 Oracle/Xvfb/Mesa llvmpipe and Quick Play joined an isolated Fabric server through `/mcflare` on both true Orange and the named Tunnel. In both cases the server reached `joined the game` and logged the restored visitor IPv4 `144.24.114.90`, matching the Oracle client host's public IPv4. This closes the rebuilt-v1 Fabric full-login and server-log IP proof for both ingress modes. The acceptance server was deliberately `online-mode=false`, so Mojang online-mode authentication remains a separate gate.
 
 ## Required before stable v1
 
-1. Full online-mode login through `/mcflare` true Orange with the rebuilt player artifact.
-2. Full online-mode login through `/mcflare` named Tunnel with the rebuilt player artifact.
-3. Ordinary external server Direct Connect/server-list regression with the rebuilt player artifact.
-4. Assert restored player IP in login/log/ban-facing Minecraft APIs, not only connection-level Status tests.
-5. Live public IPv6 visitor-IP restoration when a suitable client route is available.
-6. Sustained gameplay, teleport/chunk bursts and realistic concurrent clients.
-7. Real graphical Fabric/Quilt/NeoForge client login and sustained gameplay.
-8. Real player-IP visibility in server logs/APIs/bans plus public IPv6 edge validation.
+1. Online-mode/authenticated login through `/mcflare` with a real player account, if stable-v1 acceptance requires Mojang session authentication proof.
+2. Ordinary external server Direct Connect/server-list regression with the rebuilt player artifact installed.
+3. Assert restored player IP in ban/moderation-facing APIs in addition to the now-proven Minecraft login log.
+4. Live public IPv6 visitor-IP restoration when a suitable client route is available.
+5. Sustained gameplay, teleport/chunk bursts and realistic concurrent clients.
+6. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
 
 Detailed evidence: `TEST_EVIDENCE_2026-09-01.md` and `BUILD_MATRIX.md`.

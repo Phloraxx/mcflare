@@ -89,10 +89,12 @@ The local TCP hop keeps Minecraft seeing an ordinary TCP connection and leaves t
 - True Orange `/mcflare` -> integrated Fabric server -> Status: PASS.
 - Named HTTP Tunnel `/mcflare` -> same integrated Fabric server -> Status: PASS.
 - Both live Cloudflare paths delivered visitor-IP and Ray metadata to the gateway.
+- Real Fabric 26.1 Minecraft client Quick Play joined a world through true Orange `/mcflare` and named Tunnel `/mcflare`.
+- Both real joins restored `144.24.114.90` into Minecraft's login log, matching the Oracle client host public IPv4.
 
 ## Remaining release gates
 
-Full online-mode player login through the new `/mcflare` path, ordinary external-server player regression, sustained gameplay/jitter, realistic concurrent clients, and final source-IP behavior tests for login/logging/ban APIs remain before stable release. Fabric/NeoForge server-side loader/version gates for 1.21.11/26.1/26.2 are complete.
+Real rebuilt Fabric 26.1 player login/world join through `/mcflare` is now proven on both true Orange and named Tunnel, including restored IP visibility in Minecraft login logs. Remaining before stable release: authenticated online-mode proof if required, ordinary external-server player regression, sustained gameplay/jitter, realistic concurrent clients, public-IPv6 visitor validation, and ban/moderation API behavior. Fabric/NeoForge server-side loader/version gates for 1.21.11/26.1/26.2 are complete.
 
 ## Lazy backend connection
 

@@ -1,6 +1,6 @@
 # Real Player IP Preservation
 
-Status: v1 core requirement; locally validated on Fabric and NeoForge 1.21.11/26.1/26.2 and live-path validated through the Fabric integrated gateway.
+Status: v1 core requirement; locally validated on Fabric and NeoForge 1.21.11/26.1/26.2 and live full-client validated through the Fabric integrated gateway on both true Orange and named Tunnel.
 
 ## Problem
 
@@ -77,7 +77,9 @@ Fabric 26.2 server at `127.0.0.1:25585`, MCflare gateway at `127.0.0.1:25587`. A
 
 ### Live Cloudflare proof
 
-On 2026-09-01 both `mcflare-orange-test.mulearnscet.in/mcflare` and `mcflare2-test.mulearnscet.in/mcflare` were routed to the integrated Fabric gateway. Both returned a distinct dev-server Status response and the gateway logged `realIpPresent=true` plus `cfRayPresent=true`. This proves Cloudflare metadata, MCflare PROXY emission, server decoding, and Minecraft byte forwarding coexist on both delivery modes.
+On 2026-09-01 both `mcflare-orange-test.mulearnscet.in/mcflare` and `mcflare2-test.mulearnscet.in/mcflare` were routed to the integrated Fabric gateway. Initial Status probes returned the distinct dev-server response and logged `realIpPresent=true` plus `cfRayPresent=true`.
+
+The stronger acceptance then used the actual Fabric 26.1 Minecraft client under an isolated ARM64 Oracle Docker/Xvfb/Mesa-llvmpipe environment. Quick Play joined the isolated world through true Orange and then through the named Tunnel. The server logged `Player357[/144.24.114.90:60826] logged in` for Orange and `Player977[/144.24.114.90:49428] logged in` for Tunnel; `144.24.114.90` independently matched the Oracle client host public IPv4. This proves the forwarding address reaches Minecraft's real login/logging surface, not only a Status exchange. The server was intentionally `online-mode=false`, so this does not claim Mojang session-authentication coverage.
 
 ## References
 

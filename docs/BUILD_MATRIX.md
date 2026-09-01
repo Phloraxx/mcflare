@@ -144,6 +144,6 @@ NeoForge:
 2. 26.1-baseline combined 26.1-26.2 release build on Java 25.
 3. 26.2 head-compatibility build on Java 25.
 
-All seven current CI commands were reproduced successfully on Oracle after Paper/Purpur was added: six Fabric/NeoForge compatibility rows plus one Java-21 `:paper:build` job. Paper/Purpur intentionally uses one binary rather than one build per server version.
+All seven current CI commands were reproduced successfully on Oracle after Paper/Purpur was added: six Fabric/NeoForge compatibility rows plus one Java-21 `:paper:build` job. Paper/Purpur intentionally uses one binary rather than one build per server version. The corresponding pushed checkpoint `7e542e9354948b41f7d9188627d4f4661484c51e` completed GitHub Actions with all seven hosted jobs green.
 
 Do not create one workflow file or Git branch per Minecraft version. Add a version-specific source set only if the same shared Java source genuinely stops compiling/applying on that family.
