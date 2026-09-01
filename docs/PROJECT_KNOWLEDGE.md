@@ -663,3 +663,13 @@ The isolated Fabric 26.1 acceptance server used `127.0.0.1:25585` and integrated
 Restarting the local named test `cloudflared` container caused the gateway-side WSS stream to reset, the Minecraft server to remove the player cleanly, and the real client to show `Disconnected`; afterward no established gateway/backend socket remained. Once `cloudflared` returned, WSS Status and PufferPanel were healthy, and a fresh real client joined as `Player971[/144.24.114.90:41994]`. This is evidence for local connector restart/recovery only, not a Cloudflare-edge failure test.
 
 The Tunnel ingress was restored to `25588`; the isolated server/client were stopped; v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel all passed. The persistent `25577` and `25588` gateway processes were unchanged.
+
+## 28. True-Orange client-network loss and symmetric gateway teardown — 2026-09-01
+
+A real Fabric 26.1 client joined the isolated `25585/25587` acceptance server through true Orange while attached to a dedicated disposable Docker network. Removing only that client network created a black-holed client path without restarting Cloudflare, Traefik, the gateway or Minecraft. The first run exposed a gateway lifecycle issue: Minecraft timed the player out and the backend stream closed, but the gateway-side WSS socket stayed established because the downstream pump did not close the WebSocket when backend EOF occurred. A dead network client could therefore occupy a gateway semaphore slot longer than its Minecraft session.
+
+The gateway pump is now symmetric: when the Minecraft-to-WebSocket downstream side finishes or fails, it closes both the backend and WebSocket, which unblocks the uplink and releases the connection slot. `McflareGatewayLifecycleTest` covers this with a one-slot gateway: backend EOF must close the client promptly and a second WebSocket must then be accepted. Focused gateway tests pass with JDK 25 while still compiling the gateway to Java 8 bytecode.
+
+The real black-hole test was repeated against the rebuilt integrated gateway. The client joined successfully with Cloudflare source metadata, its Docker network was removed, Minecraft removed the player, and by the 45-second post-cut inspection there were no established sockets on either `25585` or `25587`. A fresh-client rejoin after network restoration was already proven in the preceding run. This closes client-network-loss teardown/recovery, but it is not a Cloudflare-edge outage test.
+
+Orange was restored byte-for-byte to the saved `25588` configuration. Both true-Orange and named-Tunnel `/mcflare` then returned the normal 105-byte production Status response, `25585/25587` were clear, and the original `25577` and `25588` gateway PIDs remained unchanged.

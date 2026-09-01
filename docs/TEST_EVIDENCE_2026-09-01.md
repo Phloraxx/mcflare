@@ -507,3 +507,19 @@ LIVE_IPV6_FABRIC_STATUS=PASS
 This closes the stable-v1 public-IPv6 visitor-IP transport gate. It does not claim a separate live IPv6 player login/log-line or native `ban-ip` run; IPv4 real-client login and ban behavior are already proven, while the live IPv6 Status path proves the TCP6 restoration mechanism through the real Fabric parser.
 
 After both probes, true Orange `/mcflare` was restored from `25587` to the exact saved `25588` configuration, the Fabric dev server stopped cleanly, no `25585/25587` listener remained, and the original long-lived `25577` and `25588` gateway PIDs remained unchanged. The named-Tunnel route was never moved for this IPv6 gate.
+
+## True-Orange client-network loss, recovery, and gateway teardown hardening
+
+An isolated Fabric 26.1 acceptance server again used `127.0.0.1:25585` with its integrated proxy-enabled MCflare gateway on `10.0.0.18:25587`. Only true Orange `mcflare-orange-test.mulearnscet.in/mcflare` was temporarily moved from the normal parallel gateway on `25588` to `25587`; the named Tunnel, legacy `25577` path and production Minecraft listener were not changed. A fresh software-rendered Fabric 26.1 client joined through Orange, and the gateway logged both Cloudflare real-IP and Ray metadata.
+
+The client was attached to a dedicated disposable Docker bridge. Removing only that bridge from the live client container produced a real black-holed client-network failure while leaving the Oracle host, Traefik, Cloudflare route, gateway and Minecraft server running. In the first run, Minecraft timed the player out and closed the backend stream, but the gateway-side WSS/TCP socket remained established afterward because the downstream pump closed only the backend and the uplink thread remained blocked waiting for client bytes. That meant a dead network client could retain a gateway connection slot longer than the Minecraft session.
+
+`McflareGateway` was hardened so completion or failure of the Minecraft-to-WebSocket downstream pump closes both the backend and the WebSocket. This symmetrically unblocks the uplink and releases the connection semaphore. `McflareGatewayLifecycleTest` reproduces backend EOF with `maxConnections=1`, requires the WebSocket peer to close within two seconds, then opens a second connection to prove slot reuse. Focused `:gateway:test` passes on the VM's working JDK 25 toolchain.
+
+The live black-hole test was then repeated against the rebuilt integrated gateway. The real client joined as a normal player, its disposable Docker network was removed, and Minecraft removed the player. At the 45-second post-cut inspection there were zero established sockets on both `25585` and `25587`; the formerly lingering WSS socket was gone. The client surfaced `Timed out`, while the server/gateway had already torn down the transport. This closes the client-network-loss teardown/recovery sub-gate and proves that a black-holed gameplay client does not indefinitely retain the backend stream or gateway connection slot.
+
+A fresh-client recovery had already been proven in the immediately preceding pre-fix run: after restoring the disposable network, a fresh Fabric client joined the same Orange endpoint successfully with Cloudflare metadata present. The post-fix replay specifically validated prompt symmetric teardown; client-side automatic session resume is not claimed.
+
+After both runs, Orange was restored byte-for-byte from the saved configuration to `10.0.0.18:25588`, all disposable client containers/networks were removed, and the isolated Fabric server stopped cleanly. Final Java RFC6455 Status checks returned the normal 105-byte production response on both true Orange and the named Tunnel; `25585/25587` were clear and the original long-lived `25577` and `25588` gateway PIDs were unchanged.
+
+This is a client-network black-hole test, not a Cloudflare edge outage/restart. A true Cloudflare-edge interruption remains a distinct release-quality resilience gate.

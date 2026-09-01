@@ -89,6 +89,7 @@ Current state:
 - fresh-chunk/teleport burst stability: PASS — seven high-altitude distant teleports over 5m07s, with repeated multi-second world-generation stalls and no MCflare reconnect/disconnect;
 - realistic real-client concurrency: PASS — three simultaneous Fabric 26.1 clients (two Orange, one named Tunnel), three WSS/backend streams, separate-region chunk loads, and a named-Tunnel client replacement while the two Orange sessions stayed connected;
 - named-Tunnel local connector restart recovery: PASS — an in-world real client disconnected cleanly when the test `cloudflared` connector restarted, all gateway/backend sockets closed, and a fresh real client rejoined after connector recovery;
+- true-Orange client-network black-hole teardown/recovery: PASS — removing only the live client container network disconnected the player, the hardened gateway closed both backend and WSS sides, no `25585/25587` socket remained, and fresh-client recovery is proven;
 - the acceptance server was offline-mode, so authenticated Mojang online-mode login remains unproven.
 
 Remaining before stable release:
@@ -96,7 +97,7 @@ Remaining before stable release:
 - online-mode/authenticated client proof if required for release acceptance;
 - 30+ minute active-gameplay session with latency/jitter characterization;
 - higher-scale connection-churn/ceiling characterization beyond the proven three-real-client scenario;
-- actual Cloudflare-edge/network interruption behavior remains distinct from the proven local `cloudflared` connector restart;
+- actual Cloudflare-edge interruption behavior remains distinct from both the proven local `cloudflared` connector restart and the proven client-network black-hole test;
 
 ## Gate 7 - compatibility expansion
 
@@ -112,9 +113,9 @@ Fabric and NeoForge version-branch reduction is now proven:
 
 Next order:
 
-1. Ordinary external-server regression and, if required, authenticated online-mode proof with the rebuilt client.
-2. Ban/moderation API visibility for the already-proven restored login address.
-3. 30+ minute active gameplay/jitter characterization, higher-scale load/churn characterization, actual Cloudflare-edge/network interruption behavior and public IPv6 testing.
+1. If required for stable-v1 acceptance, authenticated Mojang online-mode proof with the rebuilt client.
+2. 30+ minute active gameplay latency/jitter characterization and higher-scale real-gameplay load/churn characterization.
+3. Actual Cloudflare-edge interruption behavior; local connector restart and client-network black-hole behavior are already proven separately.
 4. Optional real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets.
 
 Never fork RFC6455/discovery/gateway logic per loader.

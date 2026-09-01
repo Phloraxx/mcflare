@@ -128,8 +128,9 @@ public final class McflareGateway implements Closeable {
 
             final WebSocketServerConnection activeWebSocket = webSocket;
             final Socket activeBackend = backend;
-            Thread downstream = startPipeThread(activeBackend, activeBackend.getInputStream(),
-                    new WebSocketOutput(activeWebSocket), "mcflare-minecraft-downstream");
+            Thread downstream = startPipeThread(activeBackend.getInputStream(),
+                    new WebSocketOutput(activeWebSocket), "mcflare-minecraft-downstream",
+                    activeBackend, activeWebSocket);
             try { pipe(new WebSocketInput(activeWebSocket), backendOut); }
             finally {
                 closeQuietly(activeBackend);
@@ -165,12 +166,14 @@ public final class McflareGateway implements Closeable {
         return socket;
     }
 
-    private static Thread startPipeThread(Closeable backend, InputStream input,
-                                          OutputStream output, String name) {
+    private static Thread startPipeThread(InputStream input, OutputStream output, String name,
+                                          Closeable... closeables) {
         Thread thread = new Thread(() -> {
             try { pipe(input, output); }
             catch (IOException ignored) {}
-            finally { closeQuietly(backend); }
+            finally {
+                for (Closeable closeable : closeables) closeQuietly(closeable);
+            }
         }, name);
         thread.setDaemon(true);
         thread.start();
