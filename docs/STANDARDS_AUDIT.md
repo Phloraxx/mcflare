@@ -67,3 +67,6 @@ RFC 6455 creates the IANA WebSocket Subprotocol registry and recommends registra
 ## Backend timing
 
 Minecraft installs a pre-handshake read timeout on accepted TCP sockets. MCflare therefore uses lazy backend connection rather than inventing a Minecraft keepalive: WebSocket control traffic stays at the WebSocket layer, and the backend exists only once Minecraft bytes actually start.
+## Build/version branching
+
+Do not use Git branches as Minecraft-version packaging. The Fabric adapter is parameterized through Gradle properties and one CI matrix. Testing currently proves one Java source tree across 1.21.11, 26.1 and 26.2, with one combined binary for 26.1-26.2. A separate 1.21.11 binary remains only because of the real legacy remap/Java-runtime packaging boundary.

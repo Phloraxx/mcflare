@@ -1,5 +1,6 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
     id 'maven-publish'
     id 'idea'
 }
@@ -7,8 +8,13 @@ plugins {
 version = "${mod_version}-dev"
 group = project.maven_group
 
+def adapterJavaVersion = Integer.parseInt(project.adapter_java_version.toString())
+def useMojangMappings = project.use_mojang_mappings.toString().toBoolean()
+
+apply plugin: (useMojangMappings ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom')
+
 base {
-    archivesName = project.archives_base_name
+    archivesName = "${project.archives_base_name}-${project.artifact_label}"
 }
 
 repositories {
@@ -25,31 +31,42 @@ dependencies {
     include "io.netty:netty-codec-haproxy:${project.netty_haproxy_version}"
 
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    if (useMojangMappings) {
+        mappings loom.officialMojangMappings()
+    }
+    if (useMojangMappings) {
+        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    }
 }
 
 processResources {
     inputs.property 'version', project.version
     inputs.property 'minecraft_version', project.minecraft_version
+    inputs.property 'minecraft_dependency', project.minecraft_dependency
     inputs.property 'loader_version', project.loader_version
+    inputs.property 'adapter_java_version', project.adapter_java_version
 
     filesMatching('fabric.mod.json') {
         expand(
                 version: project.version,
                 minecraft_version: project.minecraft_version,
-                loader_version: project.loader_version
+                minecraft_dependency: project.minecraft_dependency,
+                loader_version: project.loader_version,
+                adapter_java_version: project.adapter_java_version
         )
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 25
+    options.release = adapterJavaVersion
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    sourceCompatibility = JavaVersion.toVersion(adapterJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(adapterJavaVersion)
 }
 
 jar {

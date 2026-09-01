@@ -149,3 +149,38 @@ A live public-IPv6 visitor test could not be run: Oracle has no global IPv6 defa
 SYNTHETIC_IPV6_GATEWAY=PASS
 FABRIC_PROXY_TCP6_STATUS=PASS
 ```
+
+## Fabric version-family consolidation
+
+A standards-first build matrix was tested instead of copying Modflared's per-version branch model.
+
+The identical MCflare Fabric Java source compiled successfully against:
+
+- Minecraft 1.21.11 / Fabric Loader 0.18.2 / Loom-remap 1.14 / Java 21 / Netty HAProxy 4.2.7;
+- Minecraft 26.1 / Fabric Loader 0.18.4 / Loom 1.15 / Java 25 / Netty HAProxy 4.2.7;
+- Minecraft 26.2 / Fabric Loader 0.19.3 / Loom 1.17 / Java 25 / Netty HAProxy 4.2.15.
+
+The client-side redirect targets were inspected in the mapped Minecraft bytecode. `Connection.connect`, `Connection.connectToServer`, `ServerAddress.parseString/getHost/getPort`, and the relevant invocation descriptors are identical across all three tested versions.
+
+### Standalone 1.21.11 production artifact
+
+The real remapped `mcflare-fabric-1.21.11` JAR was installed into a clean Fabric 1.21.11 server created with the official Fabric installer. It loaded its nested core, gateway and Netty HAProxy 4.2.7 dependencies, started the local MCflare endpoint, and passed a synthetic Cloudflare-header WebSocket -> PROXY v1 -> real Minecraft Status exchange.
+
+Result: `REMAPPED_1_21_11_ARTIFACT_PROXY_STATUS=PASS`.
+
+### One binary for Minecraft 26.1 and 26.2
+
+A single artifact was compiled against the older 26.1 baseline, embedded Netty HAProxy 4.2.7, and declared the tested runtime range `>=26.1 <26.3`.
+
+The **same exact JAR file** was then installed without modification into separate clean standalone Fabric servers:
+
+- Fabric 26.1 / Loader 0.18.4: `COMBINED_26X_JAR_ON_26_1=PASS`;
+- Fabric 26.2 / Loader 0.19.3: `COMBINED_26X_JAR_ON_26_2=PASS`.
+
+Both servers loaded the same artifact, started the integrated gateway, accepted `CF-Connecting-IP`, emitted PROXY v1, and returned a real Minecraft Status response. This justifies one current `mcflare-fabric-26.1-26.2` release artifact instead of separate 26.1 and 26.2 binaries.
+
+The client-side combined-binary claim is supported by identical redirect descriptors across the two 26.x versions; a real graphical player login remains part of the stable-release gameplay gate.
+
+### CI-matrix parity check
+
+The final three-row GitHub Actions matrix was reproduced locally before commit. The 1.21.11 row used an actual OpenJDK 21 compiler/runtime, while both 26.x rows used OpenJDK 25. All three `clean build` executions passed. A no-argument default build also produced `mcflare-fabric-26.1-26.2-0.1.0-dev.jar` with runtime metadata `minecraft: >=26.1 <26.3`, `java: >=25`, Loader `>=0.18.4`, and embedded Netty HAProxy 4.2.7.

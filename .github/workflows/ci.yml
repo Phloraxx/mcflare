@@ -10,13 +10,54 @@ permissions:
 
 jobs:
   build:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Fabric 1.21.11
+            java: '21'
+            minecraft: '1.21.11'
+            minecraft_dependency: '~1.21.11'
+            loader: '0.18.2'
+            loom: '1.14-SNAPSHOT'
+            netty: '4.2.7.Final'
+            mappings: 'true'
+            artifact: '1.21.11'
+          - name: Fabric 26.1-26.2 release
+            java: '25'
+            minecraft: '26.1'
+            minecraft_dependency: '>=26.1 <26.3'
+            loader: '0.18.4'
+            loom: '1.15-SNAPSHOT'
+            netty: '4.2.7.Final'
+            mappings: 'false'
+            artifact: '26.1-26.2'
+          - name: Fabric 26.2 head compatibility
+            java: '25'
+            minecraft: '26.2'
+            minecraft_dependency: '~26.2'
+            loader: '0.19.3'
+            loom: '1.17-SNAPSHOT'
+            netty: '4.2.15.Final'
+            mappings: 'false'
+            artifact: '26.2-compat'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: ${{ matrix.java }}
           cache: gradle
       - name: Build and test
-        run: ./gradlew --no-daemon clean build
+        run: >-
+          ./gradlew --no-daemon clean build
+          -Pminecraft_version="${{ matrix.minecraft }}"
+          -Pminecraft_dependency="${{ matrix.minecraft_dependency }}"
+          -Ploader_version="${{ matrix.loader }}"
+          -Ploom_version="${{ matrix.loom }}"
+          -Pnetty_haproxy_version="${{ matrix.netty }}"
+          -Padapter_java_version="${{ matrix.java }}"
+          -Puse_mojang_mappings="${{ matrix.mappings }}"
+          -Partifact_label="${{ matrix.artifact }}"

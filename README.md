@@ -51,11 +51,11 @@ A compatible gateway returns HTTP 101 and echoes `mcflare.v1`. That successful W
 
 Cloudflare supplies the visitor address to the HTTP/WebSocket origin in `CF-Connecting-IP` (and, when relevant, `CF-Connecting-IPv6`). MCflare can translate that standard HTTP metadata into standard HAProxy PROXY protocol v1 before the Minecraft stream.
 
-The Fabric 26.2 server adapter includes a minimal trusted same-machine PROXY decoder. Paper/other proxy stacks should use their native PROXY-protocol support when available.
+The Fabric server adapter includes a minimal loopback-trusted PROXY decoder. The same source is proven on Fabric 1.21.11, 26.1 and 26.2. Paper/other proxy stacks should use their native PROXY-protocol support when available.
 
 ## Same Fabric JAR on client and server
 
-The Fabric artifact is loaded in both physical environments. Client connection hooks remain client-only; server gateway/PROXY hooks remain dedicated-server-only. Different artifacts are needed for genuinely different loaders/version hooks, not because client and server require separate downloads.
+Each Fabric release artifact is loaded in both physical environments. Client connection hooks remain client-only; server gateway/PROXY hooks remain dedicated-server-only. Current testing collapses 26.1 and 26.2 into one binary JAR; 1.21.11 remains a separate remapped/Java-21 artifact. Different artifacts are needed only at genuine runtime/loader boundaries, not because client and server require separate downloads.
 
 ## Scope
 
@@ -67,15 +67,17 @@ Packets already inside that connection, including mod/plugin custom payloads, ar
 
 - `core/` — Java-8-compatible RFC6455 client, route resolver and loopback carrier.
 - `gateway/` — Java-8-compatible HTTP/WebSocket-to-Minecraft gateway plus PROXY-v1 encoder.
-- root Fabric module — current Minecraft 26.2 client/server adapter.
+- root Fabric module — one parameterized client/server adapter source tree for Fabric 1.21.11 and 26.x.
 
 ## Build
 
-Minecraft 26.2 requires the configured Java 25 toolchain:
+The default build produces the combined Fabric 26.1-26.2 artifact and requires Java 25:
 
 ```bash
 ./gradlew --no-daemon clean build
 ```
+
+The same source also builds the Java-21/remapped 1.21.11 artifact through the CI/build matrix. See `docs/BUILD_MATRIX.md`.
 
 ## Engineering docs
 
@@ -86,6 +88,7 @@ Start with:
 - `docs/REAL_IP.md`
 - `docs/DEPLOYMENT.md`
 - `docs/COMPATIBILITY.md`
+- `docs/BUILD_MATRIX.md`
 - `docs/STANDARDS_AUDIT.md`
 - `docs/IMPLEMENTATION_PLAN.md`
 - `docs/TEST_EVIDENCE_2026-09-01.md`
@@ -94,7 +97,7 @@ Start with:
 
 ## Status
 
-Experimental. Fabric 26.2 transport, dual-side server loading, real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed Status-level integration tests. Full online-mode gameplay and broader loader/version gates remain before a stable v1 release.
+Experimental. Fabric 1.21.11, 26.1 and 26.2 server adapters now build from one source tree; the actual 1.21.11 release JAR passed standalone runtime testing, and one combined 26.1-26.2 JAR passed unchanged on both server versions. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed Status-level integration tests. Full online-mode gameplay and additional loader gates remain before stable v1.
 
 ## Attribution
 

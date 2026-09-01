@@ -6,12 +6,13 @@ Client/server is not the reason MCflare needs multiple artifacts. Loader APIs an
 
 For a specific compatible Fabric version family, the same Fabric JAR should be installable on the player and Fabric dedicated server. Fabric `fabric.mod.json` supports `environment: "*"`; client-only mixins remain physically scoped to the client and server mixins remain server scoped.
 
-Expected release model:
+Current/proposed release model:
 
 ```text
-mcflare-fabric-<mc-version>.jar    -> client + Fabric server
-mcflare-neoforge-<mc-version>.jar  -> client + NeoForge server
-mcflare-paper-<server-version>.jar -> Paper server only, if/when implemented
+mcflare-fabric-1.21.11.jar     -> client + Fabric server
+mcflare-fabric-26.1-26.2.jar   -> client + Fabric server on either 26.1 or 26.2
+mcflare-neoforge-<family>.jar   -> client + NeoForge server, when implemented
+mcflare-paper-<family>.jar      -> Paper server only, if/when implemented
 ```
 
 Do not create separate `client.jar` and `server.jar` for the same Fabric/NeoForge target unless a real packaging problem requires it.
@@ -34,7 +35,7 @@ Protocol compatibility is broad because MCflare carries bytes without decoding M
 
 Claim support only after a real build plus ordinary-direct and protected Status/login regression on that exact loader/version family.
 
-Current proven adapter: Fabric 26.2.
+Current proven Fabric source adapter: 1.21.11, 26.1 and 26.2. The same source compiles across all three. The actual remapped 1.21.11 release artifact runs successfully on a standalone Fabric server. A single 26.1-baseline release JAR runs unchanged on standalone Fabric 26.1 and 26.2 servers. See `BUILD_MATRIX.md`.
 
 ## Other mods
 
@@ -64,7 +65,7 @@ If MCflare fronts a Minecraft proxy, that proxy becomes the configured Minecraft
 
 ## Java runtimes
 
-`core/` and `gateway/` target Java 8 for broad deployability. Loader adapters target the Java runtime required by their Minecraft version; Minecraft 26.2 currently requires Java 25 in this project configuration.
+`core/` and `gateway/` target Java 8 for broad deployability. The Fabric 1.21.11 artifact targets Java 21; the combined Fabric 26.1-26.2 artifact targets Java 25.
 
 ## Test matrix per adapter
 

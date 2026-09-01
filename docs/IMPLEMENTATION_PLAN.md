@@ -27,7 +27,7 @@ Release action: decide/register final IANA WebSocket subprotocol identifier befo
 
 ## Gate 2 - real IP
 
-Implemented/proven on Fabric 26.2:
+Implemented/proven on the Fabric adapter (runtime-tested on 1.21.11, 26.1 and 26.2):
 
 - read `CF-Connecting-IPv6` then `CF-Connecting-IP`;
 - optional HAProxy PROXY v1 emission;
@@ -88,11 +88,18 @@ Required before stable release:
 
 ## Gate 7 - compatibility expansion
 
-Order:
+Fabric version-branch reduction is now proven:
 
-1. Fabric 26.2 release-quality proof.
-2. Quilt compatibility test using the same Fabric artifact.
-3. NeoForge current release adapter.
+- one Java source adapter compiles on 1.21.11, 26.1 and 26.2;
+- 1.21.11 is a separate binary only because it uses the legacy remap/Java-21 packaging boundary;
+- one 26.1-baseline binary is runtime-proven unchanged on both 26.1 and 26.2;
+- CI uses a matrix, not version branches.
+
+Next order:
+
+1. Real player full-login/gameplay proof for the rebuilt Fabric artifacts.
+2. Quilt compatibility test using the appropriate Fabric artifact.
+3. NeoForge current release adapter with shared core/gateway.
 4. Paper/Purpur server integration using native PROXY protocol.
 5. Demand-driven older Minecraft/Forge targets.
 
