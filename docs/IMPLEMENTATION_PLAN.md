@@ -37,7 +37,7 @@ Implemented/proven on the shared Fabric/NeoForge adapter (runtime-tested on both
 - apply parsed source address to Minecraft `Connection.address`;
 - gateway metadata logs indicate presence, not raw visitor IP.
 
-Proven on real Fabric 26.1 world joins through both true Orange and named Tunnel: Minecraft login logs exposed `144.24.114.90`, matching the Oracle client host public IPv4. A subsequent true-Orange acceptance used Minecraft's native `ban-ip 144.24.114.90`: the connected player was immediately kicked and a fresh real-client reconnect was rejected as IP-banned with the restored address. Remaining: live public-IPv6 visitor testing and any platform-specific moderation integrations beyond Minecraft's native ban list.
+Proven on real Fabric 26.1 world joins through both true Orange and named Tunnel: Minecraft login logs exposed `144.24.114.90`, matching the Oracle client host public IPv4. A subsequent true-Orange acceptance used Minecraft's native `ban-ip 144.24.114.90`: the connected player was immediately kicked and a fresh real-client reconnect was rejected as IP-banned with the restored address. Live public-IPv6 visitor propagation is now also proven: an external IPv6 client matched the gateway's `PROXY TCP6` source by normalized hash, and a second forced-IPv6 request returned a real Fabric 26.1 Status response through the integrated parser. Platform-specific moderation integrations beyond Minecraft's native ban list remain optional expansion.
 
 ## Gate 3 - dual-side loader artifacts
 

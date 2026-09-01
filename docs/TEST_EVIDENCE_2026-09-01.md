@@ -97,7 +97,7 @@ The side-by-side legacy regressions, PufferPanel health check, direct Minecraft 
 - authenticated/online-mode login remains unproven; later in this document a real rebuilt Fabric 26.1 offline-mode client full world join through `/mcflare` is proven on both Orange and Tunnel;
 - sustained gameplay and reconnect tests;
 - connection concurrency/overload tests on the new integrated server path;
-- live IPv6 visitor-IP restoration test;
+- live IPv6 visitor-IP restoration test (completed later in this document);
 - loader/version adapter validation beyond Fabric 26.2.
 
 ## Actual MCflare Java client transport
@@ -143,7 +143,7 @@ Lazy backend: no backend until first binary bytes: PASS
 
 The WebSocket framing/rejection cases are also covered by `WebSocketServerConnectionTest`, so they are no longer manual-only.
 
-A live public-IPv6 visitor test could not be run: Oracle has no global IPv6 default route and the Mac test host was offline. The IPv6 path was nevertheless tested end-to-end synthetically: when both forwarding headers were supplied the gateway preferred `CF-Connecting-IPv6` and emitted `PROXY TCP6`, and a Fabric 26.2 server accepted a direct TCP6 PROXY header and returned a real Minecraft Status response. The public-IPv6 edge/origin gate remains open.
+A live public-IPv6 visitor test could not be run: Oracle has no global IPv6 default route and the Mac test host was offline. The IPv6 path was nevertheless tested end-to-end synthetically: when both forwarding headers were supplied the gateway preferred `CF-Connecting-IPv6` and emitted `PROXY TCP6`, and a Fabric 26.2 server accepted a direct TCP6 PROXY header and returned a real Minecraft Status response. The public-IPv6 edge/origin gate remained open at this checkpoint and is completed later in this document with a real external IPv6 client.
 
 ```text
 SYNTHETIC_IPV6_GATEWAY=PASS
@@ -468,3 +468,42 @@ PIN_SURVIVES_FAILURE=PASS
 Storage failure behavior was tightened before commit. A non-empty malformed persisted pin file is treated as unsafe and fails closed rather than discarding potentially corrupted prior trust. A newly discovered positive route is not inserted into the trusted in-memory set until its durable append succeeds; an append failure therefore cannot be mistaken for a persistent pin. The already-open WSS is closed if persistence fails.
 
 Focused `:core:test` passed after this hardening, including positive persistence across instances, malformed-store fail-closed behavior, failed-append behavior, and the existing persisted-known-route direct-fallback refusal test. `git diff --check` also passed. The expensive real-client restart test was not repeated because the healthy persisted-pin lookup/fail-closed path exercised by that test was not changed; only exceptional storage-failure branches were tightened.
+
+## Public WSS Status concurrency and churn characterization
+
+A temporary Java harness under `/tmp` used the production `Rfc6455Client` to open simultaneous public WSS connections, send one real Minecraft Status request, read the response, and close. It changed no product source or infrastructure. Each timing covers DNS/TCP/TLS/WebSocket upgrade plus the Minecraft Status round trip, so it is not a pure network-latency measurement.
+
+| Concurrent | Orange success | Orange p50/p95/max | Tunnel success | Tunnel p50/p95/max |
+|---:|---:|---:|---:|---:|
+| 1 | 1/1 | 670/670/670 ms | 1/1 | 496/496/496 ms |
+| 8 | 8/8 | 731/743/743 ms | 8/8 | 719/727/727 ms |
+| 32 | 32/32 | 1235/1286/1288 ms | 32/32 | 969/1019/1019 ms |
+| 64 | 64/64 | 1775/1870/1888 ms | 64/64 | 1145/1275/1303 ms |
+| 128 | 128/128 | 2921/3692/3803 ms | 128/128 | 1678/2399/2558 ms |
+
+The 128-connection bursts therefore completed with zero failures on both paths. The slowest full Status transaction observed was 3.803 seconds, below the current 4.5-second MCflare discovery/connect timeout in this specific test; this is evidence, not a guarantee for other networks or loads.
+
+A separate churn run executed five consecutive 32-connection bursts on each delivery path: 160 Orange and 160 named-Tunnel connections, 320 total. Every connection completed successfully. Afterward both public endpoints again returned the normal 105-byte production Status response, no residual `25588` connection remained, and the unchanged v1 gateway process was still healthy.
+
+## Live public-IPv6 visitor-IP restoration
+
+The previously blocked public-IPv6 gate was completed using the connected Mac as an external client. An IPv6-only external address check confirmed a usable public IPv6 route. The address itself was not printed or stored in the test record; instead its normalized textual form was SHA-256 hashed locally.
+
+For the first proof, only true Orange `/mcflare` was temporarily pointed from the normal `10.0.0.18:25588` gateway to an isolated proxy-enabled gateway on `10.0.0.18:25587`. A disposable backend on `127.0.0.1:25585` required a PROXY-v1 line before accepting Minecraft bytes. A raw client on the Mac explicitly used an `AF_INET6` socket, negotiated TLS + RFC6455 `/mcflare` + `mcflare.v1`, sent a real Minecraft Status handshake/request, and received a valid 144-byte Status response.
+
+The backend received `PROXY TCP6`. After canonical IPv6 normalization, the SHA-256 of the PROXY source address exactly matched the independently measured Mac public-IPv6 hash (`5726d2931ac3b6e43142e1187b74a0b7c76ba55018dfb3495d9fea34493cc93b`). This proves the live Cloudflare edge -> MCflare gateway path preserved the actual IPv6 visitor address rather than an edge, origin, loopback, or IPv4 address.
+
+A second forced-IPv6 request strengthened the native-server leg. An isolated real Fabric 26.1 dev server listened on `127.0.0.1:25585` with its integrated MCflare gateway on `10.0.0.18:25587` and PROXY v1 enabled. The same IPv6-only Mac probe traversed true Orange and received the real Fabric server's 125-byte Minecraft Status response. The integrated gateway logged `realIpPresent=true` and `cfRayPresent=true`. Therefore the live IPv6 request passed Cloudflare, the MCflare gateway and the native Fabric PROXY-v1 parser successfully.
+
+Results:
+
+```text
+LIVE_IPV6_WSS_MINECRAFT_STATUS=PASS
+LIVE_IPV6_PROXY_FAMILY=TCP6
+LIVE_IPV6_SOURCE_HASH_MATCH=PASS
+LIVE_IPV6_FABRIC_STATUS=PASS
+```
+
+This closes the stable-v1 public-IPv6 visitor-IP transport gate. It does not claim a separate live IPv6 player login/log-line or native `ban-ip` run; IPv4 real-client login and ban behavior are already proven, while the live IPv6 Status path proves the TCP6 restoration mechanism through the real Fabric parser.
+
+After both probes, true Orange `/mcflare` was restored from `25587` to the exact saved `25588` configuration, the Fabric dev server stopped cleanly, no `25585/25587` listener remained, and the original long-lived `25577` and `25588` gateway PIDs remained unchanged. The named-Tunnel route was never moved for this IPv6 gate.

@@ -71,8 +71,9 @@ The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and t
 ## Required before stable v1
 
 1. Online-mode/authenticated login through `/mcflare` with a real player account, if stable-v1 acceptance requires Mojang session authentication proof.
-2. Live public IPv6 visitor-IP restoration when a suitable client route is available.
-3. 30+ minutes of active gameplay/latency-jitter characterization plus higher-scale load/churn characterization; the fresh-chunk, three-real-client concurrency, and local Tunnel-connector restart gates are complete. Actual Cloudflare-edge/network interruption remains separate.
-4. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
+2. 30+ minutes of active gameplay/latency-jitter characterization plus higher-scale real-gameplay load/churn characterization. Public WSS Status concurrency is already characterized to 128 simultaneous connections per delivery path; the fresh-chunk, three-real-client concurrency, and local Tunnel-connector restart gates are complete. Actual Cloudflare-edge/network interruption remains separate.
+3. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
+
+Completed release gate: a real external IPv6 client has proven true-Orange visitor-IP restoration as `PROXY TCP6`, followed by a real Fabric 26.1 Status response through the integrated parser.
 
 Detailed evidence: `TEST_EVIDENCE_2026-09-01.md` and `BUILD_MATRIX.md`.
