@@ -46,6 +46,8 @@ The gateway accepts one HTTP/WebSocket endpoint, validates `/mcflare` and `mcfla
 
 On Fabric and NeoForge, the same loader artifact can run on the dedicated server. Both loaders compile the same root Minecraft adapter source. It starts a local gateway and adds a minimal loopback-trusted PROXY-v1 prefix parser to Minecraft's Netty listener so the real visitor address can become the connection remote address. The parser uses only Netty core types already supplied by Minecraft; MCflare does not bundle `netty-codec-haproxy`.
 
+On Paper and Purpur, MCflare does not patch Minecraft networking. A single Java-21 plugin starts/stops the same shared gateway and the platform's native HAProxy PROXY support restores the visitor address. The final plugin binary is runtime-proven unchanged on 1.21.11, 26.1.2 and 26.2 for both Paper and Purpur.
+
 ## One server, multiple Minecraft instances
 
 Each Minecraft instance keeps its own public hostname and port. MCflare does not add a generic router.

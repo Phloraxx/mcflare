@@ -102,9 +102,9 @@ Fabric and NeoForge version-branch reduction is now proven:
 
 Next order:
 
-1. Real player full-login/gameplay proof for rebuilt Fabric and/or NeoForge client artifacts.
-2. Quilt compatibility test using the appropriate Fabric artifact.
-3. Paper/Purpur server integration using native PROXY protocol.
+1. Real player full-login/gameplay proof for rebuilt Fabric/Quilt and/or NeoForge client artifacts.
+2. Real player IP visibility in login/logging/ban APIs, not only Status-level transport.
+3. Sustained gameplay/concurrency and public IPv6 edge testing.
 4. Demand-driven older Minecraft/Forge targets.
 
 Never fork RFC6455/discovery/gateway logic per loader.
@@ -120,7 +120,7 @@ Never fork RFC6455/discovery/gateway logic per loader.
 
 ## Gate 9 - CI/release packaging
 
-Use one workflow with loader-scoped matrices rather than one workflow file per Minecraft version. Current CI has six rows: Fabric and NeoForge at 1.21.11, combined 26.1-26.2 release baseline, and 26.2 head compatibility. Produce loader/version artifacts from shared modules. Use explicit project task paths (`:build`, `:neoforge:build`, `:runServer`, `:neoforge:runServer`) so Gradle task-name matching does not execute both loader projects unintentionally.
+Use one workflow with loader-scoped matrices rather than one workflow file per Minecraft version. CI has six Fabric/NeoForge compatibility rows plus one Paper/Purpur plugin build on Java 21. Quilt is covered by runtime reuse of the Fabric artifacts rather than another build job or module. Produce loader/version artifacts from shared modules. Use explicit project task paths (`:build`, `:neoforge:build`, `:runServer`, `:neoforge:runServer`) so Gradle task-name matching does not execute both loader projects unintentionally.
 
 ## Definition of v1 done
 

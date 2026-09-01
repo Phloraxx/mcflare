@@ -13,7 +13,7 @@ mcflare-fabric-1.21.11.jar     -> client + Fabric server
 mcflare-fabric-26.1-26.2.jar   -> client + Fabric server on either 26.1 or 26.2
 mcflare-neoforge-1.21.11.jar   -> client + NeoForge 1.21.11 server
 mcflare-neoforge-26.1-26.2.jar -> client + NeoForge server on either 26.1 or 26.2
-mcflare-paper-<family>.jar      -> Paper server only, if/when implemented
+mcflare-paper.jar              -> Paper/Purpur server only; one Java-21 binary proven on 1.21.11, 26.1.2 and 26.2
 ```
 
 Do not create separate `client.jar` and `server.jar` for the same Fabric/NeoForge target unless a real packaging problem requires it.
@@ -50,7 +50,7 @@ Separate-socket services are outside scope. Voice chat, Dynmap HTTP, mod-specifi
 
 ## Fabric / Quilt
 
-Fabric is the reference adapter. Quilt Loader commonly aims for Fabric-mod compatibility, but MCflare should not advertise Quilt compatibility until the exact Fabric artifact completes real Quilt Status/login tests. Prefer proving reuse of the Fabric artifact over adding a Quilt-specific codebase.
+Fabric is the reference adapter. Quilt requires no MCflare-specific module or artifact: the exact Fabric 1.21.11 JAR passed direct plus TCP4/TCP6 WSS->PROXY Status on Quilt 1.21.11, and the exact combined Fabric 26.1-26.2 JAR passed the same tests unchanged on Quilt 26.1 and 26.2. Ship the Fabric artifacts for Quilt as well.
 
 ## NeoForge
 
@@ -58,7 +58,7 @@ NeoForge is now implemented as a thin packaging module over the same Minecraft a
 
 ## Paper / Purpur
 
-Paper is server-only from MCflare's perspective. Players still need a client-side Fabric/NeoForge-compatible MCflare artifact. Paper already has native PROXY protocol support, so a future Paper deployment should prefer the platform's standard setting rather than reimplementing player-IP forwarding.
+Paper/Purpur is server-only from MCflare's perspective. Players still need a client-side Fabric/Quilt/NeoForge-compatible MCflare artifact. One Java-21 `mcflare-paper` JAR is runtime-proven unchanged on Paper and Purpur 1.21.11, 26.1.2 and 26.2. It only owns gateway lifecycle; real-IP restoration uses the platform's native `proxies.proxy-protocol: true` setting.
 
 ## Velocity and Minecraft proxies
 

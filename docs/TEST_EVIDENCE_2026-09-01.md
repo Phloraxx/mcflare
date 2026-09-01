@@ -156,21 +156,23 @@ A standards-first build matrix was tested instead of copying Modflared's per-ver
 
 The identical MCflare Fabric Java source compiled successfully against:
 
-- Minecraft 1.21.11 / Fabric Loader 0.18.2 / Loom-remap 1.14 / Java 21 / Netty HAProxy 4.2.7;
-- Minecraft 26.1 / Fabric Loader 0.18.4 / Loom 1.15 / Java 25 / Netty HAProxy 4.2.7;
-- Minecraft 26.2 / Fabric Loader 0.19.3 / Loom 1.17 / Java 25 / Netty HAProxy 4.2.15.
+- Minecraft 1.21.11 / Fabric Loader 0.18.2 / Loom-remap 1.14 / Java 21;
+- Minecraft 26.1 / Fabric Loader 0.18.4 / Loom 1.15 / Java 25;
+- Minecraft 26.2 / Fabric Loader 0.19.3 / Loom 1.17 / Java 25.
+
+These compatibility builds originally included a version-matched external Netty HAProxy codec during exploration; that dependency was later removed in favor of MCflare's bounded in-project PROXY-v1 parser.
 
 The client-side redirect targets were inspected in the mapped Minecraft bytecode. `Connection.connect`, `Connection.connectToServer`, `ServerAddress.parseString/getHost/getPort`, and the relevant invocation descriptors are identical across all three tested versions.
 
 ### Standalone 1.21.11 production artifact
 
-The real remapped `mcflare-fabric-1.21.11` JAR was installed into a clean Fabric 1.21.11 server created with the official Fabric installer. It loaded its nested core, gateway and Netty HAProxy 4.2.7 dependencies, started the local MCflare endpoint, and passed a synthetic Cloudflare-header WebSocket -> PROXY v1 -> real Minecraft Status exchange.
+The real remapped `mcflare-fabric-1.21.11` JAR was installed into a clean Fabric 1.21.11 server created with the official Fabric installer. It loaded its nested core/gateway dependencies, started the local MCflare endpoint, and passed a synthetic Cloudflare-header WebSocket -> PROXY v1 -> real Minecraft Status exchange. The later final artifact no longer carries an external HAProxy codec.
 
 Result: `REMAPPED_1_21_11_ARTIFACT_PROXY_STATUS=PASS`.
 
 ### One binary for Minecraft 26.1 and 26.2
 
-A single artifact was compiled against the older 26.1 baseline, embedded Netty HAProxy 4.2.7, and declared the tested runtime range `>=26.1 <26.3`.
+A single artifact was compiled against the older 26.1 baseline and declared the tested runtime range `>=26.1 <26.3`. The final implementation uses the in-project PROXY-v1 parser rather than an embedded HAProxy codec.
 
 The **same exact JAR file** was then installed without modification into separate clean standalone Fabric servers:
 
@@ -183,7 +185,7 @@ The client-side combined-binary claim is supported by identical redirect descrip
 
 ### CI-matrix parity check
 
-The final three-row GitHub Actions matrix was reproduced locally before commit. The 1.21.11 row used an actual OpenJDK 21 compiler/runtime, while both 26.x rows used OpenJDK 25. All three `clean build` executions passed. A no-argument default build also produced `mcflare-fabric-26.1-26.2-0.1.0-dev.jar` with runtime metadata `minecraft: >=26.1 <26.3`, `java: >=25`, Loader `>=0.18.4`, and embedded Netty HAProxy 4.2.7.
+The final three-row GitHub Actions matrix was reproduced locally before commit. The 1.21.11 row used an actual OpenJDK 21 compiler/runtime, while both 26.x rows used OpenJDK 25. All three `clean build` executions passed. A no-argument default build also produced `mcflare-fabric-26.1-26.2-0.1.0-dev.jar` with runtime metadata `minecraft: >=26.1 <26.3`, `java: >=25`, Loader `>=0.18.4`.
 
 
 ## Cross-loader PROXY simplification and NeoForge validation
@@ -285,3 +287,53 @@ Tunnel /.well-known/mcflare: LEGACY_WSS_STATUS=PASS
 ```
 
 After the probes, the legacy `25577` gateway retained its original PID/start time and all three expected listeners (`25565`, `25577`, `25588`) remained healthy.
+
+## Quilt, Paper and Purpur packaging reduction
+
+Quilt Loader 0.30.1 was tested using the existing Fabric artifacts with no Quilt-specific code. The exact Fabric 1.21.11 JAR passed direct plus TCP4/TCP6 WSS->PROXY Status on Quilt 1.21.11. The same exact combined Fabric 26.1-26.2 JAR passed the same three tests on Quilt 26.1 and Quilt 26.2. Result: no Quilt artifact is required.
+
+A `paper/` module was then added as a Java-21 Bukkit/Paper lifecycle wrapper around the shared `McflareGateway`. It contains no NMS, Mixin or Paper networking hooks. Paper/Purpur native `proxies.proxy-protocol: true` consumes MCflare's standard PROXY-v1 header.
+
+After replacing gateway `System.out/err` calls with injectable standard-Java log consumers, the final Paper plugin SHA was:
+
+```text
+3af90adb4e485bb666edd84781ee0703131fea49fa5cee3a426f15c52d78b4ba
+```
+
+That exact binary passed WSS->PROXY TCP4 and TCP6 Status on Paper 1.21.11, Paper 26.1.2 and Paper 26.2. The same exact binary passed direct Status plus WSS->PROXY TCP4/TCP6 on Purpur 1.21.11, 26.1.2 and 26.2. Paper 26.2 was also rerun after the logging cleanup and no Bukkit `System.out` plugin nag remained.
+
+This reduces the tested server packaging to one Paper/Purpur JAR across all three version families while preserving platform-native source-IP restoration.
+
+## Final seven-row CI and gateway-logging regression
+
+After adding the Paper/Purpur plugin and making `McflareGateway` logging injectable through standard Java `Consumer<String>` sinks, all seven current CI commands were rerun locally with real JDK 21/25 toolchains:
+
+```text
+fabric_1_21_11=PASS
+fabric_26x_release=PASS
+fabric_26_2_head=PASS
+neoforge_1_21_11=PASS
+neoforge_26x_release=PASS
+neoforge_26_2_head=PASS
+paper_plugin=PASS
+ALL_7_LOCAL_CI_ROWS=PASS
+```
+
+The logging change was then runtime-tested on isolated current-family development servers. Fabric 26.1 and NeoForge 26.1 each passed ordinary direct Status plus WSS->PROXY TCP4 and TCP6 Status using the shared gateway. The Fabric dev config was restored afterward and the NeoForge dev server was stopped cleanly.
+
+## Final live smoke after Paper/logging integration
+
+After Paper/Purpur integration and the shared gateway logging-sink change, only the parallel standards-v1 gateway on `10.0.0.18:25588` was refreshed from the current classes. The legacy `25577` process remained the original August 31 process and production Minecraft `25565` was not restarted. The current Java `Rfc6455Client` then passed real Minecraft Status through both `mcflare-orange-test.mulearnscet.in/mcflare` and `mcflare2-test.mulearnscet.in/mcflare`; direct production Status also passed.
+
+### Final local release artifact hashes after platform integration
+
+```text
+mcflare-fabric-26.1-26.2-0.1.0-dev.jar
+6cd2c3042f568b2ee1ad1497df2ce2b63303962edb15bd8038cecb1691e1dc41
+
+mcflare-neoforge-26.1-26.2-0.1.0-dev.jar
+144256853262eb75ce3452743092080f0f5bd92a0cf7af1c70c58932f1aa8bf5
+
+mcflare-paper-0.1.0-dev.jar
+3af90adb4e485bb666edd84781ee0703131fea49fa5cee3a426f15c52d78b4ba
+```

@@ -66,9 +66,9 @@ Tunnel example:
 
 Cloudflared ingress can also match request paths with regular expressions. MCflare itself does not duplicate this router.
 
-## Integrated Fabric server
+## Integrated Fabric / NeoForge server
 
-The same Fabric JAR can load on the dedicated server. Default generated config:
+The same Fabric or NeoForge loader JAR can load on its dedicated server. Both use the shared server adapter and generated config:
 
 ```properties
 enabled=true
@@ -77,6 +77,17 @@ max-connections=256
 ```
 
 The backend Minecraft address/port is taken from the running dedicated server rather than duplicated in MCflare config. If the local listener port is occupied, MCflare logs the bind failure and Minecraft continues to run; choose another per-instance listener port.
+
+## Paper / Purpur plugin
+
+Paper and Purpur use one server-only Java-21 plugin rather than the Minecraft Mixin adapter. The plugin starts/stops the same gateway and defaults `proxy-protocol: true` so real player IP remains a first-class requirement. Enable the platform's native setting:
+
+```yaml
+proxies:
+  proxy-protocol: true
+```
+
+The Minecraft backend port must then be treated as a PROXY-protocol backend: firewall/private-bind it so players cannot bypass MCflare and connect without a PROXY header. Do not add a second Paper/Purpur IP-forwarding implementation; the native server decoder is the standard handoff. The same plugin JAR is runtime-proven on Paper and Purpur 1.21.11, 26.1.2 and 26.2.
 
 ## Standalone gateway
 

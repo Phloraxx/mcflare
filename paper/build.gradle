@@ -1,0 +1,49 @@
+plugins {
+    id 'java-library'
+}
+
+version = "${rootProject.mod_version}-dev"
+group = rootProject.maven_group
+
+base {
+    archivesName = 'mcflare-paper'
+}
+
+repositories {
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
+    implementation project(':core')
+    implementation project(':gateway')
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('plugin.yml') {
+        expand(version: project.version)
+    }
+}
+
+// core/ and gateway/ are our own loader-neutral modules; merge them into the plugin JAR.
+tasks.named('jar', Jar).configure {
+    dependsOn project(':core').tasks.named('classes'), project(':gateway').tasks.named('classes')
+    from project(':core').sourceSets.main.output
+    from project(':gateway').sourceSets.main.output
+}

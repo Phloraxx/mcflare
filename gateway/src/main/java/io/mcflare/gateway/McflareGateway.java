@@ -13,6 +13,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /** Minimal HTTP/WebSocket gateway: one MCflare stream maps to one Minecraft TCP stream. */
 public final class McflareGateway implements Closeable {
@@ -22,15 +23,20 @@ public final class McflareGateway implements Closeable {
     private final InetSocketAddress minecraft;
     private final Semaphore connectionSlots;
     private final boolean proxyProtocol;
+    private final Consumer<String> infoLog;
+    private final Consumer<String> errorLog;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private volatile ServerSocket listener;
 
     private McflareGateway(InetSocketAddress listen, InetSocketAddress minecraft,
-                           int maxConnections, boolean proxyProtocol) {
+                           int maxConnections, boolean proxyProtocol,
+                           Consumer<String> infoLog, Consumer<String> errorLog) {
         this.listen = listen;
         this.minecraft = minecraft;
         this.connectionSlots = new Semaphore(maxConnections);
         this.proxyProtocol = proxyProtocol;
+        this.infoLog = infoLog;
+        this.errorLog = errorLog;
     }
 
     public static void main(String[] args) throws Exception {
@@ -39,15 +45,23 @@ public final class McflareGateway implements Closeable {
         int maxConnections = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_MAX_CONNECTIONS;
         boolean proxyProtocol = args.length > 3 && Boolean.parseBoolean(args[3]);
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
-        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol);
+        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
+                System.out::println, System.err::println);
         gateway.bindListener();
         gateway.runLoop();
     }
 
     public static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
                                              int maxConnections, boolean proxyProtocol) throws IOException {
+        return startAsync(listen, minecraft, maxConnections, proxyProtocol, System.out::println, System.err::println);
+    }
+
+    public static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
+                                             int maxConnections, boolean proxyProtocol,
+                                             Consumer<String> infoLog, Consumer<String> errorLog) throws IOException {
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
-        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol);
+        if (infoLog == null || errorLog == null) throw new IllegalArgumentException("log consumers are required");
+        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol, infoLog, errorLog);
         gateway.bindListener();
         Thread thread = new Thread(gateway::runLoop, "mcflare-gateway-accept");
         thread.setDaemon(true);
@@ -59,7 +73,7 @@ public final class McflareGateway implements Closeable {
         ServerSocket server = new ServerSocket();
         server.bind(listen);
         listener = server;
-        System.out.println("MCFLARE_GATEWAY listen=" + listen + " minecraft=" + minecraft
+        infoLog.accept("MCFLARE_GATEWAY listen=" + listen + " minecraft=" + minecraft
                 + " maxConnections=" + connectionSlots.availablePermits() + " proxyProtocol=" + proxyProtocol);
     }
 
@@ -80,7 +94,7 @@ public final class McflareGateway implements Closeable {
                 thread.setDaemon(true);
                 thread.start();
             } catch (IOException error) {
-                if (!closed.get()) System.err.println("MCFLARE_GATEWAY accept error: " + error);
+                if (!closed.get()) errorLog.accept("MCFLARE_GATEWAY accept error: " + error);
                 closeQuietly(client);
             }
         }
@@ -93,7 +107,7 @@ public final class McflareGateway implements Closeable {
             webSocket = WebSocketServerConnection.accept(client, McflareProtocol.PATH, McflareProtocol.SUBPROTOCOL);
             String clientIp = realClientIp(webSocket);
             String cfRay = webSocket.header("cf-ray");
-            System.out.println("MCFLARE_GATEWAY upgrade realIpPresent=" + (clientIp != null)
+            infoLog.accept("MCFLARE_GATEWAY upgrade realIpPresent=" + (clientIp != null)
                     + " cfRayPresent=" + (cfRay != null));
 
             // Do not open Minecraft until the first application bytes arrive.
@@ -122,7 +136,7 @@ public final class McflareGateway implements Closeable {
                 joinQuietly(downstream);
             }
         } catch (Exception error) {
-            if (!(error instanceof EOFException)) System.err.println("MCFLARE_GATEWAY connection error: " + error);
+            if (!(error instanceof EOFException)) errorLog.accept("MCFLARE_GATEWAY connection error: " + error);
         } finally {
             closeQuietly(backend);
             closeQuietly(webSocket);

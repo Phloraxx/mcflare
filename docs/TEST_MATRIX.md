@@ -11,7 +11,7 @@
 | NeoForge 1.21.11 build/tests on real JDK 21 + Parchment | PASS |
 | NeoForge 26.1-26.2 baseline build/tests | PASS |
 | NeoForge 26.2 head-compatibility build/tests | PASS |
-| All six exact loader-scoped CI rows reproduced locally | PASS |
+| All seven current CI rows reproduced locally (6 Fabric/NeoForge + Paper) | PASS |
 | Same Java adapter source compiles on 1.21.11, 26.1 and 26.2 | PASS |
 | Actual remapped 1.21.11 JAR loads on standalone Fabric 1.21.11 server | PASS |
 | 1.21.11 artifact integrated WSS -> PROXY -> Minecraft Status | PASS |
@@ -26,7 +26,12 @@
 | Standard Netty ChannelInitializer lifecycle on Fabric + NeoForge | PASS |
 | In-project bounded PROXY-v1 parser; external HAProxy codec removed | PASS |
 | Fabric post-refactor direct + WSS/PROXY TCP4/TCP6 regression | PASS |
+| Fabric/NeoForge post-logging-API runtime direct + TCP4/TCP6 WSS/PROXY | PASS |
+| Fabric 1.21.11 artifact unchanged on Quilt 1.21.11, direct + TCP4/TCP6 WSS/PROXY | PASS |
+| Combined Fabric 26.x artifact unchanged on Quilt 26.1 and 26.2, direct + TCP4/TCP6 WSS/PROXY | PASS |
 | Combined 26.x artifact integrated WSS -> PROXY -> Status on both versions | PASS |
+| One final Paper plugin SHA on Paper 1.21.11 / 26.1.2 / 26.2, TCP4/TCP6 WSS/PROXY | PASS |
+| Same final Paper plugin SHA on Purpur 1.21.11 / 26.1.2 / 26.2, direct + TCP4/TCP6 WSS/PROXY | PASS |
 | Client redirect bytecode descriptors identical across 1.21.11 / 26.1 / 26.2 | PASS audit |
 | Gateway PROXY-v1 unit tests | PASS |
 | Integrated Fabric server gateway starts/stops | PASS |
@@ -62,7 +67,7 @@ The pre-v1-path checkpoint already proved full Minecraft 26.2 login through true
 4. Assert restored player IP in login/log/ban-facing Minecraft APIs, not only connection-level Status tests.
 5. Live public IPv6 visitor-IP restoration when a suitable client route is available.
 6. Sustained gameplay, teleport/chunk bursts and realistic concurrent clients.
-7. Quilt same-Fabric-artifact compatibility test.
-8. Paper/Purpur gate using native PROXY support; NeoForge server-side 1.21.11/26.1/26.2 gates are complete.
+7. Real graphical Fabric/Quilt/NeoForge client login and sustained gameplay.
+8. Real player-IP visibility in server logs/APIs/bans plus public IPv6 edge validation.
 
 Detailed evidence: `TEST_EVIDENCE_2026-09-01.md` and `BUILD_MATRIX.md`.

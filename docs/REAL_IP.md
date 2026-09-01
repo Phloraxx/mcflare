@@ -65,9 +65,9 @@ Recommended deployment:
 
 Multi-tenant hosts should review loopback trust carefully if untrusted tenants share a network namespace.
 
-## Paper / proxy stacks
+## Paper / Purpur / proxy stacks
 
-Paper already exposes native `proxy-protocol` handling in its global configuration. Velocity also has HAProxy protocol support. Where a platform natively supports PROXY protocol, prefer that standard implementation rather than a platform-specific MCflare IP-forwarding format.
+Paper and Purpur expose native `proxies.proxy-protocol` handling in their global configuration. MCflare's Paper plugin therefore does not patch Minecraft networking or parse PROXY itself: it starts the shared gateway, which emits standard PROXY v1, and the server platform restores the address. The same final plugin SHA passed TCP4 and TCP6 WSS->PROXY Status on Paper and Purpur 1.21.11, 26.1.2 and 26.2. Velocity likewise has native HAProxy protocol support. Prefer platform-native PROXY handling wherever available.
 
 ## Proven tests
 

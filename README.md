@@ -51,11 +51,21 @@ A compatible gateway returns HTTP 101 and echoes `mcflare.v1`. That successful W
 
 Cloudflare supplies the visitor address to the HTTP/WebSocket origin in `CF-Connecting-IP` (and, when relevant, `CF-Connecting-IPv6`). MCflare can translate that standard HTTP metadata into standard HAProxy PROXY protocol v1 before the Minecraft stream.
 
-The shared Fabric/NeoForge server adapter includes a minimal loopback-trusted PROXY-v1 parser. The same Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11, 26.1 and 26.2. MCflare no longer bundles Netty's HAProxy codec; the standard text header is parsed by a bounded in-project parser. Paper/other proxy stacks should use their native PROXY-protocol support when available.
+The shared Fabric/NeoForge server adapter includes a minimal loopback-trusted PROXY-v1 parser. The same Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11, 26.1 and 26.2. MCflare no longer bundles Netty's HAProxy codec; the standard text header is parsed by a bounded in-project parser. Paper and Purpur use their native HAProxy PROXY-protocol support, so the Paper plugin needs no Minecraft/Netty injection at all.
 
 ## Same loader JAR on client and server
 
 Each Fabric or NeoForge release artifact is intended for both physical environments. Client connection hooks remain client-only; server gateway/PROXY hooks remain dedicated-server-only. For both loaders, current testing collapses 26.1 and 26.2 into one binary JAR; 1.21.11 remains a separate Java-21/toolchain artifact. Different artifacts are needed only at genuine loader/runtime boundaries, not because client and server require separate downloads.
+
+Tested download families are therefore only:
+
+```text
+mcflare-fabric-1.21.11.jar      # Fabric + Quilt, client/server
+mcflare-fabric-26.1-26.2.jar    # Fabric + Quilt, client/server
+mcflare-neoforge-1.21.11.jar    # NeoForge, client/server
+mcflare-neoforge-26.1-26.2.jar  # NeoForge, client/server
+mcflare-paper.jar               # Paper + Purpur, server only
+```
 
 ## Scope
 
@@ -67,8 +77,9 @@ Packets already inside that connection, including mod/plugin custom payloads, ar
 
 - `core/` — Java-8-compatible RFC6455 client, route resolver and loopback carrier.
 - `gateway/` — Java-8-compatible HTTP/WebSocket-to-Minecraft gateway plus standard PROXY-v1 codec.
-- root Fabric module — packages the shared Minecraft adapter for Fabric.
+- root Fabric module — packages the shared Minecraft adapter for Fabric; the same artifacts are runtime-proven on Quilt Loader.
 - `neoforge/` — packages the same shared Minecraft adapter for NeoForge; loader-specific Java is only a tiny `@Mod` marker.
+- `paper/` — one Java-21 server plugin for Paper and Purpur 1.21.11 through 26.2; it only starts/stops the shared gateway and relies on the platform's native PROXY support.
 
 ## Build
 
@@ -84,6 +95,12 @@ NeoForge:
 
 ```bash
 ./gradlew --no-daemon :core:build :gateway:build :neoforge:build
+```
+
+Paper/Purpur plugin:
+
+```bash
+./gradlew --no-daemon :core:build :gateway:build :paper:build
 ```
 
 The same shared source also builds the Java-21 1.21.11 Fabric and NeoForge artifacts through the CI/build matrix. See `docs/BUILD_MATRIX.md`. Avoid unqualified `runServer`; use `:runServer` for Fabric or `:neoforge:runServer` for NeoForge.
@@ -106,7 +123,7 @@ Start with:
 
 ## Status
 
-Experimental. One loader-neutral Minecraft adapter source is now runtime-proven on both Fabric and NeoForge 1.21.11, 26.1 and 26.2. Each loader needs only two tested release families: 1.21.11 and a combined 26.1-26.2 binary. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed Status-level integration tests. Full authenticated player gameplay remains before stable v1.
+Experimental. One loader-neutral Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11/26.x; the Fabric artifacts are also runtime-proven unchanged on Quilt. Paper and Purpur use one Java-21 plugin JAR across 1.21.11, 26.1.2 and 26.2 with native PROXY support. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed Status-level integration tests. Full authenticated player gameplay remains before stable v1.
 
 ## Attribution
 
