@@ -179,6 +179,11 @@ public final class Rfc6455Client implements Closeable {
         output.flush();
 
         String headers = readHeaders(input);
+        validateUpgradeResponse(headers, key, requiredSubprotocol);
+    }
+
+    static void validateUpgradeResponse(String headers, String key, String requiredSubprotocol)
+            throws IOException {
         String[] lines = headers.split("\\r\\n");
         if (lines.length == 0 || !lines[0].contains(" 101 ")) {
             throw new IOException("WebSocket upgrade failed: " + (lines.length == 0 ? "empty response" : lines[0]));
@@ -189,6 +194,7 @@ public final class Rfc6455Client implements Closeable {
         String upgrade = null;
         String connection = null;
         String subprotocol = null;
+        String extensions = null;
         for (int i = 1; i < lines.length; i++) {
             int colon = lines[i].indexOf(':');
             if (colon <= 0) continue;
@@ -198,11 +204,16 @@ public final class Rfc6455Client implements Closeable {
             else if ("upgrade".equals(name)) upgrade = value;
             else if ("connection".equals(name)) connection = value;
             else if ("sec-websocket-protocol".equals(name)) subprotocol = value;
+            else if ("sec-websocket-extensions".equals(name)) extensions = value;
         }
+        boolean subprotocolValid = requiredSubprotocol == null
+                ? subprotocol == null
+                : requiredSubprotocol.equals(subprotocol);
         if (!expectedAccept.equals(actualAccept)
                 || !"websocket".equalsIgnoreCase(upgrade)
                 || !containsToken(connection, "upgrade")
-                || (requiredSubprotocol != null && !requiredSubprotocol.equals(subprotocol))) {
+                || !subprotocolValid
+                || extensions != null) {
             throw new IOException("Invalid WebSocket upgrade response");
         }
     }
@@ -270,37 +281,41 @@ public final class Rfc6455Client implements Closeable {
     }
 
     private void sendFrame(int opcode, byte[] data, int offset, int length) throws IOException {
-        if (closed) throw new EOFException("WebSocket closed");
         synchronized (writeLock) {
-            output.write(0x80 | (opcode & 0x0F));
-            if (length <= 125) {
-                output.write(0x80 | length);
-            } else if (length <= 0xFFFF) {
-                output.write(0x80 | 126);
-                output.write((length >>> 8) & 0xFF);
-                output.write(length & 0xFF);
-            } else {
-                output.write(0x80 | 127);
-                long value = length;
-                for (int shift = 56; shift >= 0; shift -= 8) {
-                    output.write((int) ((value >>> shift) & 0xFF));
-                }
-            }
-
-            random.nextBytes(maskKey);
-            output.write(maskKey);
-            int written = 0;
-            while (written < length) {
-                int chunk = Math.min(writeScratch.length, length - written);
-                for (int i = 0; i < chunk; i++) {
-                    writeScratch[i] = (byte) (data[offset + written + i]
-                            ^ maskKey[(written + i) & 3]);
-                }
-                output.write(writeScratch, 0, chunk);
-                written += chunk;
-            }
-            output.flush();
+            if (closed) throw new EOFException("WebSocket closed");
+            sendFrameLocked(opcode, data, offset, length);
         }
+    }
+
+    private void sendFrameLocked(int opcode, byte[] data, int offset, int length) throws IOException {
+        output.write(0x80 | (opcode & 0x0F));
+        if (length <= 125) {
+            output.write(0x80 | length);
+        } else if (length <= 0xFFFF) {
+            output.write(0x80 | 126);
+            output.write((length >>> 8) & 0xFF);
+            output.write(length & 0xFF);
+        } else {
+            output.write(0x80 | 127);
+            long value = length;
+            for (int shift = 56; shift >= 0; shift -= 8) {
+                output.write((int) ((value >>> shift) & 0xFF));
+            }
+        }
+
+        random.nextBytes(maskKey);
+        output.write(maskKey);
+        int written = 0;
+        while (written < length) {
+            int chunk = Math.min(writeScratch.length, length - written);
+            for (int i = 0; i < chunk; i++) {
+                writeScratch[i] = (byte) (data[offset + written + i]
+                        ^ maskKey[(written + i) & 3]);
+            }
+            output.write(writeScratch, 0, chunk);
+            written += chunk;
+        }
+        output.flush();
     }
 
     /** Returns the next binary/continuation payload, or null after a close frame. */
@@ -332,7 +347,10 @@ public final class Rfc6455Client implements Closeable {
             byte[] payload = readExact((int) length);
 
             if (opcode == 0x8) {
-                closed = true;
+                synchronized (writeLock) {
+                    if (!closed) sendFrameLocked(0x8, payload, 0, payload.length);
+                    closed = true;
+                }
                 return null;
             }
             if (opcode == 0x9) {
@@ -379,26 +397,24 @@ public final class Rfc6455Client implements Closeable {
 
     @Override
     public void close() throws IOException {
-        if (closed) {
-            socket.close();
-            return;
-        }
-        closed = true;
-        try {
-            synchronized (writeLock) {
-                if (!socket.isClosed()) {
-                    // Best effort close frame. An empty client close frame is valid.
-                    output.write(0x88);
-                    output.write(0x80);
-                    random.nextBytes(maskKey);
-                    output.write(maskKey);
-                    output.flush();
+        IOException failure = null;
+        synchronized (writeLock) {
+            if (!closed) {
+                try {
+                    sendFrameLocked(0x8, new byte[0], 0, 0);
+                } catch (IOException error) {
+                    failure = error;
+                } finally {
+                    closed = true;
                 }
             }
-        } catch (IOException ignored) {
-            // Socket close below is authoritative.
-        } finally {
-            socket.close();
         }
+        try {
+            socket.close();
+        } catch (IOException error) {
+            if (failure == null) failure = error;
+            else failure.addSuppressed(error);
+        }
+        if (failure != null) throw failure;
     }
 }

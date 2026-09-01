@@ -1,0 +1,44 @@
+package io.mcflare.core;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
+import org.junit.jupiter.api.Test;
+
+class Rfc6455UpgradeValidationTest {
+    private static final String KEY = "MDEyMzQ1Njc4OWFiY2RlZg==";
+
+    @Test void exactRequestedSubprotocolIsAccepted() throws Exception {
+        Rfc6455Client.validateUpgradeResponse(response("Sec-WebSocket-Protocol: mcflare.v1\r\n"), KEY, "mcflare.v1");
+    }
+
+    @Test void mixedCaseSubprotocolIsRejected() {
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(
+                response("Sec-WebSocket-Protocol: MCFLARE.V1\r\n"), KEY, "mcflare.v1"));
+    }
+
+    @Test void unsolicitedSubprotocolIsRejected() {
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(
+                response("Sec-WebSocket-Protocol: mcflare.v1\r\n"), KEY, null));
+    }
+
+    @Test void unsolicitedExtensionIsRejected() {
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(
+                response("Sec-WebSocket-Extensions: permessage-deflate\r\n"), KEY, null));
+    }
+
+    private static String response(String extra) {
+        try {
+            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            String accept = Base64.getEncoder().encodeToString(sha1.digest(
+                    (KEY + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(StandardCharsets.US_ASCII)));
+            return "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                    + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n" + extra + "\r\n";
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+    }
+}

@@ -51,7 +51,7 @@ final class WebSocketServerConnection implements Closeable {
             throw new IOException("unexpected WebSocket path");
         }
         validateUpgrade(request.headers);
-        if (!containsToken(request.headers.get("sec-websocket-protocol"), requiredSubprotocol)) {
+        if (!containsExactToken(request.headers.get("sec-websocket-protocol"), requiredSubprotocol)) {
             writeHttpError(socket.getOutputStream(), 400, "MCflare subprotocol required");
             throw new IOException("missing MCflare WebSocket subprotocol");
         }
@@ -92,8 +92,8 @@ final class WebSocketServerConnection implements Closeable {
         write(data, 0, data.length);
     }
     void write(byte[] data, int offset, int length) throws IOException {
-        if (closed) throw new EOFException("WebSocket closed");
         synchronized (writeLock) {
+            if (closed) throw new EOFException("WebSocket closed");
             output.write(0x82);
             if (length <= 125) {
                 output.write(length);
@@ -139,7 +139,11 @@ final class WebSocketServerConnection implements Closeable {
             for (int i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
 
             if (opcode == 0x8) {
-                closed = true;
+                try {
+                    writeControl(0x8, payload);
+                } finally {
+                    closed = true;
+                }
                 return null;
             }
             if (opcode == 0x9) {
@@ -164,6 +168,7 @@ final class WebSocketServerConnection implements Closeable {
 
     private void writeControl(int opcode, byte[] payload) throws IOException {
         synchronized (writeLock) {
+            if (closed) throw new EOFException("WebSocket closed");
             output.write(0x80 | opcode);
             output.write(payload.length);
             output.write(payload);
@@ -214,6 +219,15 @@ final class WebSocketServerConnection implements Closeable {
         String[] tokens = value.split(",");
         for (String token : tokens) {
             if (expected.equalsIgnoreCase(token.trim())) return true;
+        }
+        return false;
+    }
+
+    private static boolean containsExactToken(String value, String expected) {
+        if (value == null) return false;
+        String[] tokens = value.split(",");
+        for (String token : tokens) {
+            if (expected.equals(token.trim())) return true;
         }
         return false;
     }
@@ -281,8 +295,25 @@ final class WebSocketServerConnection implements Closeable {
 
     @Override
     public void close() throws IOException {
-        closed = true;
-        socket.close();
+        IOException failure = null;
+        synchronized (writeLock) {
+            if (!closed) {
+                try {
+                    writeControl(0x8, new byte[] {0x03, (byte) 0xE8});
+                } catch (IOException error) {
+                    failure = error;
+                } finally {
+                    closed = true;
+                }
+            }
+        }
+        try {
+            socket.close();
+        } catch (IOException error) {
+            if (failure == null) failure = error;
+            else failure.addSuppressed(error);
+        }
+        if (failure != null) throw failure;
     }
 
     private static final class UpgradeRequest {

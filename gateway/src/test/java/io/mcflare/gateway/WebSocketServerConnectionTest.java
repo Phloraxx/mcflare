@@ -74,6 +74,47 @@ class WebSocketServerConnectionTest {
     @Test void wrongPathAndSubprotocolAreRejectedBeforeUpgrade() throws Exception {
         assertHttpError("/wrong", "mcflare.v1", "404");
         assertHttpError("/mcflare", "wrong.v1", "400");
+        assertHttpError("/mcflare", "MCFLARE.V1", "400");
+    }
+
+    @Test void exactSubprotocolMayAppearInAProtocolList() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "other.v1, mcflare.v1", "");
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            ws.close(); client.close();
+        }
+    }
+
+    @Test void receivedCloseIsEchoedBeforeWebSocketEof() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            client.setSoTimeout(2000);
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            byte[] closePayload = new byte[] {0x03, (byte) 0xE8};
+            client.getOutputStream().write(maskedFrame(0x8, true, closePayload));
+            client.getOutputStream().flush();
+
+            byte[] one = new byte[1];
+            assertEquals(-1, ws.read(one, 0, 1));
+            assertArrayEquals(new byte[] {(byte) 0x88, 2, 0x03, (byte) 0xE8},
+                    readExact(client.getInputStream(), 4));
+            ws.close(); client.close();
+        }
+    }
+
+    @Test void serverInitiatedCloseSendsNormalClosureBeforeTcpEof() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            client.setSoTimeout(2000);
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+
+            ws.close();
+
+            assertArrayEquals(new byte[] {(byte) 0x88, 2, 0x03, (byte) 0xE8},
+                    readExact(client.getInputStream(), 4));
+            assertEquals(-1, client.getInputStream().read());
+            client.close();
+        }
     }
 
     private static void assertHttpError(String path, String subprotocol, String status) throws Exception {

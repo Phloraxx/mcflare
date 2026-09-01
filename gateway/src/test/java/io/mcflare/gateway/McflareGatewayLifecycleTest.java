@@ -11,7 +11,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
@@ -121,9 +120,12 @@ class McflareGatewayLifecycleTest {
     private static void assertPeerClosesPromptly(Socket socket) throws IOException {
         socket.setSoTimeout(2_000);
         try {
-            assertEquals(-1, socket.getInputStream().read());
-        } catch (SocketException expected) {
-            // A reset is also a prompt peer close.
+            InputStream input = socket.getInputStream();
+            assertEquals(0x88, input.read(), "gateway must initiate a WebSocket close after backend EOF");
+            assertEquals(2, input.read(), "normal close payload length");
+            assertEquals(0x03, input.read(), "normal close code high byte");
+            assertEquals(0xE8, input.read(), "normal close code low byte");
+            assertEquals(-1, input.read(), "TCP EOF must follow the close frame");
         } catch (SocketTimeoutException timeout) {
             fail("gateway left the WebSocket open after backend EOF", timeout);
         }
