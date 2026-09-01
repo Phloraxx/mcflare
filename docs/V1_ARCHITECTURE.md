@@ -91,3 +91,7 @@ The local TCP hop keeps Minecraft seeing an ordinary TCP connection and leaves t
 ## Remaining release gates
 
 Full online-mode player login through the new `/mcflare` path, ordinary-server regression with the dual-side artifact, sustained gameplay/jitter, multiple concurrent clients, additional loader/version adapters, and final source-IP behavior tests for login/logging/ban APIs remain before stable release.
+
+## Lazy backend connection
+
+The gateway completes the HTTP/WebSocket upgrade first but does not open the Minecraft TCP backend until the first binary application bytes arrive. Standard WebSocket Ping/Pong can therefore keep the Cloudflare-side connection healthy during discovery without starting Minecraft's pre-handshake timeout. Gateway connection slots remain bounded by `max-connections`.

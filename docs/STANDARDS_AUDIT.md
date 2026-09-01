@@ -63,3 +63,7 @@ RFC 6455 creates the IANA WebSocket Subprotocol registry and recommends registra
 - https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/protocols/
 - https://docs.fabricmc.net/develop/loader/fabric-mod-json
 - https://docs.papermc.io/paper/reference/global-configuration/
+
+## Backend timing
+
+Minecraft installs a pre-handshake read timeout on accepted TCP sockets. MCflare therefore uses lazy backend connection rather than inventing a Minecraft keepalive: WebSocket control traffic stays at the WebSocket layer, and the backend exists only once Minecraft bytes actually start.

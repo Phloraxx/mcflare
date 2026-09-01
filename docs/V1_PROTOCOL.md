@@ -74,3 +74,7 @@ The client cannot and should not distinguish them. Tunnel-specific TCP publishin
 - RFC 8615, Well-Known URIs: https://www.rfc-editor.org/rfc/rfc8615
 - IANA WebSocket registries: https://www.iana.org/assignments/websocket/
 - Cloudflare WebSockets: https://developers.cloudflare.com/network/websockets/
+
+## Backend activation
+
+A successful WebSocket upgrade does not itself create a Minecraft backend connection. The gateway opens the configured TCP backend only after receiving the first non-empty binary/continuation application payload. WebSocket control frames are handled locally and never become Minecraft bytes.

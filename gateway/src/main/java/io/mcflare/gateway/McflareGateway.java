@@ -96,13 +96,21 @@ public final class McflareGateway implements Closeable {
             System.out.println("MCFLARE_GATEWAY upgrade realIpPresent=" + (clientIp != null)
                     + " cfRayPresent=" + (cfRay != null));
 
+            // Do not open Minecraft until the first application bytes arrive.
+            // WebSocket Ping/Pong used during discovery must not consume a backend
+            // connection or trip Minecraft's pre-handshake read timeout.
+            byte[] firstData = new byte[64 * 1024];
+            int firstRead = webSocket.read(firstData, 0, firstData.length);
+            if (firstRead < 0) return;
+
             backend = connectTcp(minecraft);
             OutputStream backendOut = backend.getOutputStream();
             if (proxyProtocol && clientIp != null) {
                 byte[] proxyHeader = ProxyProtocolV1.encode(clientIp, nonZeroPort(client.getPort()), minecraft.getPort());
                 backendOut.write(proxyHeader);
-                backendOut.flush();
             }
+            backendOut.write(firstData, 0, firstRead);
+            backendOut.flush();
 
             final WebSocketServerConnection activeWebSocket = webSocket;
             final Socket activeBackend = backend;

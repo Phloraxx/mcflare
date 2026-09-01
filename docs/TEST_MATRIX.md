@@ -44,3 +44,8 @@
 10. NeoForge/Paper gates only after Fabric v1 is stable.
 
 Detailed evidence: `TEST_EVIDENCE_2026-09-01.md`.
+| Java client reconnect stress: Orange 10/10 + Tunnel 10/10 | PASS |
+| 40 s pre-data WebSocket Ping/Pong then Minecraft Status, Orange + Tunnel | PASS after lazy-backend fix |
+| Gateway capacity bound and HTTP 503 overload behavior | PASS |
+| RFC6455 fragmentation/control/masking/frame-bound tests | PASS + JUnit |
+| IPv6 gateway + Fabric PROXY TCP6 synthetic path | PASS; public-IPv6 visitor still OPEN |

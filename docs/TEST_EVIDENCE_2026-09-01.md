@@ -119,3 +119,33 @@ The Fabric PROXY detector was narrowed from same-machine addresses to loopback-o
 LOOPBACK_ONLY_PROXY_STATUS=PASS
 DIRECT_WITH_LOOPBACK_DETECTOR_STATUS=PASS
 ```
+
+## Post-push edge-case hardening
+
+Additional Oracle-only gates found and fixed one timing issue. Minecraft installs a roughly 30-second pre-handshake read timeout; the gateway previously opened the backend immediately at WebSocket upgrade, so a deliberately delayed first Minecraft packet could lose the backend even while WebSocket Ping/Pong remained healthy. The gateway now lazy-connects the Minecraft backend on the first binary application bytes.
+
+Validation after the change:
+
+```text
+Orange Rfc6455Client reconnects: 10/10 PASS
+Tunnel Rfc6455Client reconnects: 10/10 PASS
+Orange 40-second Ping/Pong then Status: PASS
+Tunnel 40-second Ping/Pong then Status: PASS
+Gateway max=4, fifth connection HTTP 503: PASS
+Slot release/reacquire: PASS
+Fragmented binary + interleaved Ping: PASS
+Wrong path -> HTTP 404: PASS
+Wrong subprotocol -> HTTP 400: PASS
+Unmasked client frame rejected: PASS
+Oversized frame rejected before payload read: PASS
+Lazy backend: no backend until first binary bytes: PASS
+```
+
+The WebSocket framing/rejection cases are also covered by `WebSocketServerConnectionTest`, so they are no longer manual-only.
+
+A live public-IPv6 visitor test could not be run: Oracle has no global IPv6 default route and the Mac test host was offline. The IPv6 path was nevertheless tested end-to-end synthetically: when both forwarding headers were supplied the gateway preferred `CF-Connecting-IPv6` and emitted `PROXY TCP6`, and a Fabric 26.2 server accepted a direct TCP6 PROXY header and returned a real Minecraft Status response. The public-IPv6 edge/origin gate remains open.
+
+```text
+SYNTHETIC_IPV6_GATEWAY=PASS
+FABRIC_PROXY_TCP6_STATUS=PASS
+```
