@@ -18,6 +18,11 @@ repositories {
 dependencies {
     implementation project(':core')
     include project(':core')
+    implementation project(':gateway')
+    include project(':gateway')
+
+    implementation "io.netty:netty-codec-haproxy:${project.netty_haproxy_version}"
+    include "io.netty:netty-codec-haproxy:${project.netty_haproxy_version}"
 
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"

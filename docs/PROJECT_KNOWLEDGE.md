@@ -1,3 +1,5 @@
+> **CURRENT ARCHITECTURE NOTICE (2026-09-01):** Sections below preserve historical experiments. The current standards-first v1 architecture is defined by `V1_ARCHITECTURE.md`, `V1_PROTOCOL.md`, `REAL_IP.md`, `DEPLOYMENT.md`, and `TEST_EVIDENCE_2026-09-01.md`. Historical Tunnel-basic, MCF1, voice, datagram, and `/.well-known/mcflare` designs are superseded where they conflict with those files.
+
 # MCflare project knowledge
 
 > Canonical engineering record. Updated 2026-08-30.
@@ -598,3 +600,14 @@ Dedicated true Orange reduced median gameplay RTT by about 14 ms versus the name
 During Orange testing, one returned Cloudflare IPv4 address timed out while another connected immediately. `Rfc6455Client` was therefore hardened to race resolved addresses with a short stagger and use the first successful TCP connection. The fix passed the clean build, dedicated true-Orange WSS, full Minecraft login, and a real Temurin Java 8 runtime test. A freshly created proxied hostname initially returned Cloudflare `526` until Traefik/ACME had issued a matching origin certificate; MCflare deployment should verify the WebSocket upgrade before considering DNS provisioning complete.
 
 Tunnel-specific code is now absent from MCflare. Tunnel may still be used externally to publish the same HTTP/WebSocket gateway, but it does not alter client/gateway protocol or source structure.
+## 21. Standards-first v1 architecture freeze — 2026-09-01
+
+The product protocol is now `wss://<logical-host>/mcflare` with WebSocket subprotocol `mcflare.v1`. `/mcflare` replaces the experimental unregistered `/.well-known/mcflare` suffix. The successful WebSocket upgrade remains the actual Minecraft carrier. Gameplay payloads remain raw ordered Minecraft bytes.
+
+Orange and Tunnel are explicitly external ingress alternatives. Orange uses an administrator-controlled reverse proxy; Tunnel uses administrator-managed cloudflared with an HTTP service. MCflare has no Cloudflare API/Tunnel credential/process management.
+
+Real visitor IP is now a v1 requirement. Cloudflare's `CF-Connecting-IP` / `CF-Connecting-IPv6` is translated by the gateway into HAProxy PROXY v1. Fabric 26.2 includes a minimal trusted same-machine Netty HAProxy decoder that updates `Connection.address`. The same Fabric artifact now loads on client and dedicated server (`environment: "*"`), with side-specific mixins.
+
+Oracle reconstruction from handoff commit `747fc9f88254d87451e6df8a38521d518a845a6f` passed a Java-25 clean build, local synthetic source-IP/PROXY Status, true Orange `/mcflare` Status, named Tunnel `/mcflare` Status, and combined live Cloudflare -> PROXY -> integrated Fabric Status for both ingress modes. Legacy routes and direct production/dev Minecraft remained healthy. Quick Tunnel was excluded after repeated edge 404/500 responses that never reached origin despite a healthy registered connector.
+
+See `TEST_EVIDENCE_2026-09-01.md` for exact proof and `IMPLEMENTATION_PLAN.md` for remaining full-login/release gates.

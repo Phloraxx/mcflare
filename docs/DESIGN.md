@@ -1,32 +1,40 @@
 # MCflare Design
 
+Current architecture is defined by `V1_ARCHITECTURE.md` and `V1_PROTOCOL.md`.
+
 ## Product boundary
 
-MCflare transports one thing: the normal Minecraft Java TCP byte stream. Traffic already carried inside that connection is transparent to MCflare. Separate sockets opened by mods are intentionally out of scope.
+MCflare carries one ordered Minecraft Java TCP stream over RFC6455 WebSocket. It does not interpret Minecraft packets and does not carry separate mod sockets.
 
-## Target data path
+## Core invariants
+
+1. `/mcflare` plus WebSocket subprotocol `mcflare.v1` is the v1 public protocol.
+2. The successful discovery WebSocket is the gameplay carrier; do not reconnect just to start gameplay.
+3. Orange and Tunnel are external ingress alternatives, never protocol modes.
+4. The gateway is one configured Minecraft backend, not a generic service router.
+5. Player IP uses Cloudflare visitor headers -> HAProxy PROXY v1, not an MCflare identity packet.
+6. Minecraft encryption/authentication/compression remain Minecraft's responsibility.
+7. WebSocket Ping/Pong/Close remain WebSocket's responsibility.
+8. TLS/ACME, DNS, Cloudflare API, cloudflared and Tunnel credentials stay outside MCflare.
+9. Keep the loopback carrier unless profiling proves it is a material bottleneck.
+10. Claim loader/version compatibility only after real build + direct/protected connection regression.
+
+## Current path
 
 ```text
-Minecraft -> loopback carrier -> WSS :443 -> Cloudflare -> MCflare Gateway -> Minecraft TCP
+Minecraft -> loopback carrier -> WSS /mcflare -> Cloudflare
+  -> (Orange reverse proxy OR HTTP Tunnel)
+  -> MCflare gateway -> optional PROXY v1 -> Minecraft TCP
 ```
 
-Normal Cloudflare orange-cloud proxying is the preferred deployment. Tunnel is not part of MCflare code; it is only an optional external origin transport for environments that cannot accept inbound HTTPS.
+## Multi-instance rule
 
-## Why the loopback carrier stays
+One public hostname per Minecraft instance. External ingress maps that hostname to the corresponding MCflare listener. MCflare itself does not duplicate hostname routing.
 
-Minecraft still sees a normal TCP socket. That keeps loader/version adapters thin and avoids replacing Minecraft's Netty transport across many versions. The local hop is negligible compared with WAN latency.
+## Failure semantics
 
-## Gateway
+A positive `101 + mcflare.v1` selects protected transport for that attempt. Carrier loss ends the current Minecraft session normally. There is no replay/resume layer. Ordinary server discovery remains available for hosts that are not MCflare.
 
-The gateway accepts only `/.well-known/mcflare`, terminates WebSocket, and copies bytes to/from one configured Minecraft TCP backend. It does not multiplex services, parse Minecraft packets, proxy arbitrary destinations, or provide UDP.
+## Security
 
-## Security invariants
-
-- Once a server is classified as MCflare, carrier failure is fatal; never fall back to a potentially exposed direct origin.
-- Keep Minecraft TCP closed to the public Internet where possible.
-- With orange-cloud deployment, restrict the gateway origin to Cloudflare/reverse-proxy traffic.
-- Connection count and handshake/frame bounds remain enforced.
-
-## Discovery and first connection
-
-MCflare requests `Sec-WebSocket-Protocol: mcflare.v1`. A gateway must echo that subprotocol in its `101` response. That successful WebSocket is immediately retained as the actual Minecraft carrier, so discovery and transport establishment are one operation. Cached positive routes still fail closed if a future MCflare WebSocket cannot be established.
+Trust Cloudflare forwarding headers only behind trusted Cloudflare ingress. Trust PROXY headers only from configured/local gateway sources. Do not expose interactive browser challenges on `/mcflare`. Keep gateway resource limits.

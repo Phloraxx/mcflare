@@ -1,41 +1,46 @@
 # MCflare Test Matrix
 
-## Proven current baseline
+## Proven current gates
 
 | Test | Result |
 |---|---|
-| Fabric 26.2 protected full login | PASS |
-| Ordinary server direct fallback | PASS |
-| Java-8 core TLS/WSS probe against Cloudflare | PASS |
-| `mcflare.v1` WebSocket subprotocol discovery | PASS |
-| Discovery WebSocket reused for full Minecraft login | PASS; one gateway upgrade for join |
-| True Orange-cloud WSS path with no Tunnel ingress | PASS |
-| True Orange-cloud full Minecraft 26.2 login | PASS |
-| True Orange-cloud path on real Temurin Java 8 | PASS |
-| Named Tunnel HTTP/WSS full login | PASS; optional deployment control |
-| Gateway 256-slot overload rejects next connection with 503 | PASS |
-| WebSocket fragmentation/validation hardening | PASS |
-| Fail-closed protected carrier behavior | PASS |
-| MCflare installed alongside SVC with no MCflare voice plugin | PASS |
+| Clean Java-25 Gradle build on Oracle reconstruction | PASS — 19 tasks |
+| Gateway PROXY-v1 unit tests | PASS |
+| Fabric 26.2 dual-side artifact loads on dedicated server | PASS |
+| Integrated server gateway starts/stops | PASS |
+| Direct dev Minecraft with PROXY detector installed | PASS |
+| Synthetic `CF-Connecting-IP` -> PROXY v1 -> Fabric Status | PASS |
+| True Orange `/mcflare` -> standalone gateway -> production Status | PASS |
+| Named HTTP Tunnel `/mcflare` -> same standalone gateway -> production Status | PASS |
+| True Orange `/mcflare` -> integrated Fabric/PROXY -> dev Status | PASS |
+| Named HTTP Tunnel `/mcflare` -> integrated Fabric/PROXY -> dev Status | PASS |
+| Actual Java `Rfc6455Client` Status over `/mcflare` through Orange and named Tunnel | PASS |
+| Legacy Orange `/.well-known/mcflare` side-by-side route | PASS |
+| Legacy named Tunnel `/.well-known/mcflare` fallback | PASS |
+| Production direct Minecraft Status | PASS |
+| PufferPanel route after named connector restart | PASS — HTTP 200 |
+| Quick Tunnel as regression control | INVALID/EXCLUDED — edge 404/500 before origin despite healthy connector |
 
-## 2026-08-31 direct vs Orange vs Tunnel benchmark
+## Already proven in prior checkpoint
 
-Same Mac, same Oracle backend/gateway, 15 samples per route:
+- Prepared discovery WebSocket reuse.
+- True Orange full Minecraft 26.2 login on old path.
+- Named HTTP Tunnel full login on old path.
+- Java-8 core WSS runtime.
+- Gateway capacity limit and RFC6455 validation hardening.
+- Ordinary server direct fallback with prior client artifact.
 
-| Path | Setup median | Minecraft RTT median | RTT p95 |
-|---|---:|---:|---:|
-| Direct Oracle WSS | 207 ms | 70 ms | 78 ms |
-| Dedicated true Orange (`mcflare-orange-test.mulearnscet.in`) | 571 ms | 144 ms | 610 ms |
-| Named Tunnel (`mcflare2-test.mulearnscet.in`) | 580 ms | 158 ms | 896 ms |
+## Required before stable v1
 
-`mcflare-orange-test.mulearnscet.in` is a dedicated proxied A/AAAA hostname and was verified absent from every running `cloudflared` ingress. Earlier `payment.mulearnscet.in` and `aegissafety.co.in` measurements are excluded because both were later confirmed Tunnel-backed. The hostname initially returned Cloudflare `526` until Traefik/ACME issued the origin certificate; WSS and full login passed after certificate propagation.
+1. Clean final build after all documentation/source edits.
+2. Full online-mode Fabric 26.2 login through `/mcflare` true Orange.
+3. Full online-mode Fabric 26.2 login through `/mcflare` named Tunnel.
+4. Ordinary direct server regression with the rebuilt dual-side client artifact.
+5. Verify restored player IP in server login/log/ban-facing API, not only Status transport.
+6. Live IPv6 visitor-IP path when available.
+7. Sustained gameplay, teleport/chunk bursts and multiple concurrent clients.
+8. Artifact-content inspection and clean-server install proof.
+9. Quilt same-artifact compatibility test.
+10. NeoForge/Paper gates only after Fabric v1 is stable.
 
-## Current scope gates
-
-1. Clean build/tests after each transport change.
-2. Online-mode Minecraft gate.
-3. Sustained Orange gameplay/jitter/chunk-load benchmark.
-4. Origin firewall/Full-strict production hardening.
-5. Forge/NeoForge/legacy adapter gates after the transport is frozen.
-
-Mods using Minecraft custom payloads/plugin messages share the Minecraft connection and require no MCflare adapter. Mods opening separate TCP/UDP sockets are outside MCflare's scope.
+Detailed evidence: `TEST_EVIDENCE_2026-09-01.md`.
