@@ -1,6 +1,6 @@
 # Real Player IP Preservation
 
-Status: v1 core requirement; locally and live-path validated on Fabric 26.2.
+Status: v1 core requirement; locally validated on Fabric and NeoForge 1.21.11/26.1/26.2 and live-path validated through the Fabric integrated gateway.
 
 ## Problem
 
@@ -39,19 +39,19 @@ PROXY TCP6 <real-player-ip> ::1 <source-port> <minecraft-port>\r\n
 
 Then the normal Minecraft bytes follow byte-for-byte.
 
-## Source-port interoperability finding
+## Source-port semantics
 
-Cloudflare exposes the real visitor IP in HTTP headers but does not expose the original TCP source port to this origin application. The HAProxy text specification permits port 0, but Netty 4.2.15's HAProxy decoder rejected a v1 header using source port 0 in our real 26.2 integration test.
+Cloudflare exposes the real visitor IP in HTTP headers but does not expose the player's original TCP source port to this origin application. MCflare therefore uses the non-zero TCP source port of the HTTP/WebSocket ingress connection as an opaque interoperability value. The player IP is authoritative; MCflare does **not** claim that the substituted port is the player's original Internet source port.
 
-For interoperability, MCflare uses the non-zero TCP source port of the ingress connection arriving at the gateway as an opaque connection port. The IP is the identity that Minecraft moderation and logging systems materially use; MCflare must not claim that this substituted port is the player's original Internet source port.
+The in-project parser accepts the standard PROXY-v1 source-port range, including zero, but the gateway's normal encoded path uses its available nonzero ingress port.
 
-## Fabric implementation
+## Fabric and NeoForge implementation
 
-The dedicated-server artifact wraps Minecraft's existing `ServerConnectionListener` channel initializer. For loopback connections it temporarily installs Netty's `HAProxyMessageDecoder`. If a PROXY header is present, the standard decoded source address is applied to Minecraft's `Connection.address`, then the normal Minecraft pipeline continues.
+The shared dedicated-server adapter wraps Minecraft's existing `ServerConnectionListener` child-channel initializer using Netty's normal `ChannelInitializer` lifecycle. For loopback connections it installs a small detector before ordinary Minecraft decoding.
 
-If no PROXY header is detected, normal Minecraft bytes continue untouched. Remote direct clients do not receive the trusted local PROXY treatment.
+The detector buffers only enough bytes to distinguish the optional `PROXY ` prefix and enforces the PROXY-v1 108-byte text-line maximum. A valid TCP4/TCP6 line is parsed by MCflare's loader-independent `ProxyProtocolV1` codec, the source address is applied to Minecraft's `Connection.address`, and the remaining bytes continue through the normal Minecraft pipeline.
 
-The server adapter uses Netty's standard decoder rather than parsing HAProxy text manually.
+If no PROXY header is detected, normal Minecraft bytes continue untouched. Remote direct clients do not receive the trusted local PROXY treatment. MCflare does not bundle or depend on Netty's separate HAProxy codec module.
 
 ## Trust model
 
@@ -61,7 +61,7 @@ Recommended deployment:
 
 - Tunnel: keep the gateway private/loopback or private-network reachable from cloudflared.
 - Orange: keep the gateway behind the reverse proxy and restrict the public origin to Cloudflare where operationally possible; Authenticated Origin Pulls is an optional infrastructure hardening layer.
-- Minecraft-side PROXY decoder: trust only the integrated/local MCflare gateway by default.
+- Minecraft-side PROXY parser: trust only the integrated/local MCflare gateway by default.
 
 Multi-tenant hosts should review loopback trust carefully if untrusted tenants share a network namespace.
 
@@ -73,7 +73,7 @@ Paper already exposes native `proxy-protocol` handling in its global configurati
 
 ### Local synthetic Cloudflare proof
 
-Fabric 26.2 server at `127.0.0.1:25585`, MCflare gateway at `127.0.0.1:25587`. A synthetic WSS request included `CF-Connecting-IP: 198.51.100.42`; MCflare emitted PROXY v1 and a real Minecraft Status request/response succeeded.
+Fabric 26.2 server at `127.0.0.1:25585`, MCflare gateway at `127.0.0.1:25587`. A synthetic WSS request included `CF-Connecting-IP: 198.51.100.42`; MCflare emitted PROXY v1 and a real Minecraft Status request/response succeeded. The same parser/lifecycle was subsequently runtime-proven on Fabric 26.1 plus NeoForge 1.21.11, 26.1 and 26.2, including synthetic TCP6.
 
 ### Live Cloudflare proof
 

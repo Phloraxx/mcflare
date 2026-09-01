@@ -7,7 +7,6 @@ import io.netty.channel.ChannelFuture;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.Connection;
 import net.minecraft.server.network.EventLoopGroupHolder;
-import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,7 +20,7 @@ public class ConnectScreenRunnableMixin {
     @Shadow @Final private ServerAddress val$hostAndPort;
 
     @Redirect(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;"))
-    private @NotNull ChannelFuture connect(@NotNull InetSocketAddress address,
+    private ChannelFuture connect(InetSocketAddress address,
                                            EventLoopGroupHolder holder,
                                            Connection connection) {
         String host = val$hostAndPort.getHost();

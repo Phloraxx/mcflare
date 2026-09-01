@@ -11,3 +11,5 @@ pluginManagement {
 
 include ':core'
 include ':gateway'
+
+include ':neoforge'

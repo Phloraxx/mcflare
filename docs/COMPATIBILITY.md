@@ -11,7 +11,8 @@ Current/proposed release model:
 ```text
 mcflare-fabric-1.21.11.jar     -> client + Fabric server
 mcflare-fabric-26.1-26.2.jar   -> client + Fabric server on either 26.1 or 26.2
-mcflare-neoforge-<family>.jar   -> client + NeoForge server, when implemented
+mcflare-neoforge-1.21.11.jar   -> client + NeoForge 1.21.11 server
+mcflare-neoforge-26.1-26.2.jar -> client + NeoForge server on either 26.1 or 26.2
 mcflare-paper-<family>.jar      -> Paper server only, if/when implemented
 ```
 
@@ -35,7 +36,7 @@ Protocol compatibility is broad because MCflare carries bytes without decoding M
 
 Claim support only after a real build plus ordinary-direct and protected Status/login regression on that exact loader/version family.
 
-Current proven Fabric source adapter: 1.21.11, 26.1 and 26.2. The same source compiles across all three. The actual remapped 1.21.11 release artifact runs successfully on a standalone Fabric server. A single 26.1-baseline release JAR runs unchanged on standalone Fabric 26.1 and 26.2 servers. See `BUILD_MATRIX.md`.
+Current proven shared source adapter: Fabric **and NeoForge** 1.21.11, 26.1 and 26.2. The same root Java source compiles/applies across all six loader/version combinations. Each loader's real 1.21.11 production artifact passed standalone server tests, and each loader has one 26.1-baseline JAR proven unchanged on standalone 26.1 and 26.2 servers. See `BUILD_MATRIX.md`.
 
 ## Other mods
 
@@ -53,7 +54,7 @@ Fabric is the reference adapter. Quilt Loader commonly aims for Fabric-mod compa
 
 ## NeoForge
 
-NeoForge needs its own loader adapter because connection hooks and metadata differ. Keep RFC6455, resolver, gateway, and PROXY encoding in shared modules.
+NeoForge is now implemented as a thin packaging module over the same Minecraft adapter source used by Fabric. Shared root source contains no NeoForge imports; the only NeoForge-specific Java is a tiny `@Mod("mcflare")` marker. NeoForge 1.21.11, 26.1 and 26.2 have passed direct Status plus integrated WSS -> PROXY -> Status tests. One exact 26.1-baseline NeoForge JAR is runtime-proven on both 26.1 and 26.2.
 
 ## Paper / Purpur
 
@@ -65,7 +66,7 @@ If MCflare fronts a Minecraft proxy, that proxy becomes the configured Minecraft
 
 ## Java runtimes
 
-`core/` and `gateway/` target Java 8 for broad deployability. The Fabric 1.21.11 artifact targets Java 21; the combined Fabric 26.1-26.2 artifact targets Java 25.
+`core/` and `gateway/` target Java 8 for broad deployability. Fabric and NeoForge 1.21.11 artifacts target Java 21; both combined 26.1-26.2 loader artifacts target Java 25.
 
 ## Test matrix per adapter
 

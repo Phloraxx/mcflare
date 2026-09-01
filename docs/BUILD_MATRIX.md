@@ -1,61 +1,92 @@
-# MCflare Fabric Build Matrix
+# MCflare Build Matrix
 
 ## Goal
 
-Keep one Fabric Java source tree and produce the smallest number of binary artifacts actually required by Minecraft's runtime/mapping boundaries.
+Keep one loader-neutral Minecraft adapter source tree and produce the smallest number of binary artifacts actually required by loader/runtime packaging boundaries.
 
-Client/server does **not** split the artifact: each Fabric artifact contains both client hooks and dedicated-server gateway/PROXY hooks.
+Client/server does **not** split an artifact. Each Fabric or NeoForge artifact contains both client connection hooks and dedicated-server gateway/PROXY hooks.
 
 ## Proven release families
 
-| Artifact family | Compile baseline | Runtime versions | Java | Loom mode | HAProxy codec | Status |
-|---|---:|---|---:|---|---|---|
-| `mcflare-fabric-1.21.11` | 1.21.11 | 1.21.11 | 21 | legacy `fabric-loom-remap` + Mojang mappings | Netty 4.2.7 | production artifact runtime PASS |
-| `mcflare-fabric-26.1-26.2` | 26.1 | 26.1 and 26.2 | 25 | modern unobfuscated Loom | Netty 4.2.7 | same binary runtime PASS on both |
+| Artifact family | Compile baseline | Runtime versions | Java | Build/mapping mode | Status |
+|---|---:|---|---:|---|---|
+| `mcflare-fabric-1.21.11` | Minecraft 1.21.11 | 1.21.11 | 21 | legacy Loom-remap + Mojang mappings | production artifact runtime PASS |
+| `mcflare-fabric-26.1-26.2` | Minecraft 26.1 | 26.1 and 26.2 | 25 | modern Loom | same exact binary runtime PASS on both |
+| `mcflare-neoforge-1.21.11` | NeoForge 21.11.6-beta / MC 1.21.11 | 1.21.11 | 21 | ModDevGradle 2.0.124 + Parchment | production artifact runtime PASS, TCP4/TCP6 PROXY PASS |
+| `mcflare-neoforge-26.1-26.2` | NeoForge 26.1.0.1-beta / MC 26.1 | 26.1 and 26.2 | 25 | ModDevGradle 2.0.141 | same SHA-identical binary runtime PASS on both |
 
-A third CI row compiles against 26.2/Loader 0.19.3/Loom 1.17/Netty 4.2.15 as a head-compatibility check, but it is not intended to create a third release artifact while the combined 26.x binary remains valid.
+Each loader also has a 26.2 head-compatibility CI row. The head rows compile directly against current 26.2 APIs but do not create extra release families while the 26.1-baseline combined artifacts remain valid.
 
-## Why 1.21.11 is a separate binary
+## Shared Java source
 
-The Java source is currently identical, but the packaging pipeline is not. Minecraft 1.21.11 still uses the legacy obfuscated/remapped Fabric production path and Java 21. The 26.x line uses the modern unobfuscated runtime and Java 25.
+The root `src/main/java` adapter source is compiled by both Fabric and NeoForge. It contains no Fabric or NeoForge imports. Loader-specific Java is currently limited to NeoForge's tiny `@Mod("mcflare")` marker class; Fabric requires no Java bootstrap class.
 
-Trying to force one cross-generation binary would require extra class/remap/bootstrap machinery for little user benefit. Two Fabric artifacts are simpler and more auditable.
+Shared adapter responsibilities are limited to:
+
+- intercepting Minecraft status/join connection establishment;
+- using the loader-independent `RouteResolver` and loopback carrier;
+- starting/stopping the local gateway on a dedicated server;
+- inserting the optional loopback-trusted PROXY-v1 detector into Minecraft's Netty listener.
+
+The RFC6455 transport and gateway remain in `core/` and `gateway/` and are not copied per loader.
+
+## Why 1.21.11 remains a separate binary
+
+The Java source is identical, but the packaging/toolchain boundary is real. Minecraft 1.21.11 uses Java 21 plus legacy remapping/mapping pipelines. Minecraft 26.x uses Java 25 and current unobfuscated/tooling pipelines.
+
+Forcing a single binary across those generations would require additional remap/bootstrap machinery with no transport benefit. A separate 1.21.11 artifact per loader is smaller and more auditable.
 
 ## Why 26.1 and 26.2 share one binary
 
-The relevant connection APIs and mixin redirect descriptors were bytecode-audited and are identical across 26.1 and 26.2. A JAR compiled against the older 26.1 API and Netty 4.2.7 baseline was installed unchanged in standalone Fabric 26.1 and Fabric 26.2 servers.
+Relevant connection APIs/mixin targets are compatible across 26.1 and 26.2. For each loader, one artifact built against the older 26.1 baseline was installed unchanged in clean standalone 26.1 and 26.2 servers.
 
-Both runtimes passed:
+The same exact binaries passed:
 
-- mod loading;
-- server mixin application;
+- mod loading and server mixin application;
 - integrated local MCflare gateway startup;
-- `CF-Connecting-IP` -> PROXY v1 -> Minecraft Status;
-- ordinary Minecraft server Status path.
+- ordinary direct Minecraft Status;
+- `CF-Connecting-IP` -> PROXY v1 -> Minecraft Status.
 
-Therefore the release metadata can safely declare `>=26.1 <26.3` for this tested family.
+The NeoForge combined artifact was SHA-256 identical in both test installations.
+
+## PROXY implementation has no extra Netty codec dependency
+
+MCflare speaks standard HAProxy PROXY protocol v1 on the wire but no longer bundles `netty-codec-haproxy`. PROXY v1 is parsed by a bounded in-project ASCII prefix parser (108-byte line maximum), avoiding Netty-version coupling between Minecraft releases.
+
+The parser accepts TCP4/TCP6 literals, never resolves forwarding metadata through DNS, strips the PROXY line before normal Minecraft bytes continue, and leaves non-PROXY direct connections untouched.
 
 ## Build properties
 
-The root Fabric adapter is parameterized by Gradle properties rather than branches:
+Fabric properties:
 
-- `minecraft_version` - compile baseline;
-- `minecraft_dependency` - Fabric metadata runtime range;
-- `loader_version` - Loader compile/runtime minimum;
-- `loom_version` - matching Loom generation;
-- `netty_haproxy_version` - HAProxy codec aligned with the baseline Minecraft Netty API;
-- `adapter_java_version` - Java class-file level required by that Minecraft family;
-- `use_mojang_mappings` - selects legacy Loom-remap/Mojang mappings when required;
-- `artifact_label` - output filename family label.
+- `minecraft_version`
+- `minecraft_dependency`
+- `loader_version`
+- `loom_version`
+- `adapter_java_version`
+- `use_mojang_mappings`
+- `artifact_label`
 
-`core/` and `gateway/` remain Java-8-compatible regardless of the adapter target.
+NeoForge properties:
 
-## Default build
+- `neoforge_moddev_version`
+- `neo_version`
+- `neo_version_range`
+- `neoforge_minecraft_version_range`
+- `neoforge_java_version`
+- `neoforge_artifact_label`
+- `neoforge_use_parchment`
+- `parchment_minecraft_version`
+- `parchment_mappings_version`
 
-The repository defaults to the combined current 26.x release family:
+`core/` and `gateway/` remain Java-8-compatible regardless of adapter target.
+
+## Default artifacts
+
+Default Fabric build (Java 25):
 
 ```bash
-./gradlew --no-daemon clean build
+./gradlew --no-daemon :core:build :gateway:build :build
 ```
 
 Expected artifact:
@@ -64,32 +95,34 @@ Expected artifact:
 build/libs/mcflare-fabric-26.1-26.2-<version>.jar
 ```
 
-## 1.21.11 build
+Default NeoForge build (Java 25):
 
 ```bash
-./gradlew --no-daemon clean build \
-  -Pminecraft_version=1.21.11 \
-  -Pminecraft_dependency='~1.21.11' \
-  -Ploader_version=0.18.2 \
-  -Ploom_version=1.14-SNAPSHOT \
-  -Pnetty_haproxy_version=4.2.7.Final \
-  -Padapter_java_version=21 \
-  -Puse_mojang_mappings=true \
-  -Partifact_label=1.21.11
+./gradlew --no-daemon :core:build :gateway:build :neoforge:build
 ```
+
+Expected artifact:
+
+```text
+neoforge/build/libs/mcflare-neoforge-26.1-26.2-<version>.jar
+```
+
+Use explicit project-qualified task paths. In this multi-project Gradle build, an unqualified task such as `runServer` can match tasks in more than one subproject.
 
 ## CI policy
 
-Use one GitHub Actions workflow with a matrix. Do not create one workflow file or one Git branch per Minecraft version.
+One workflow contains two loader-scoped three-row matrices:
 
-Current rows:
+Fabric:
+1. 1.21.11 release build on Java 21.
+2. 26.1-baseline combined 26.1-26.2 release build on Java 25.
+3. 26.2 head-compatibility build on Java 25.
 
-1. Fabric 1.21.11 release build.
-2. Fabric 26.1-26.2 release-baseline build.
-3. Fabric 26.2 head-compatibility build.
+NeoForge:
+1. 1.21.11 release build on Java 21 + Parchment.
+2. 26.1-baseline combined 26.1-26.2 release build on Java 25.
+3. 26.2 head-compatibility build on Java 25.
 
-Add a new row only when it catches a real compatibility boundary. Add a version-specific source set only if the same Java source genuinely cannot compile/apply on that family.
+All six exact CI command rows were reproduced successfully on Oracle before this matrix was committed.
 
-## Future loaders
-
-NeoForge and Paper are separate loader/platform artifacts, not separate copies of MCflare transport logic. They should reuse `core/` and `gateway/` and keep only loader lifecycle/network hooks in their adapters.
+Do not create one workflow file or Git branch per Minecraft version. Add a version-specific source set only if the same shared Java source genuinely stops compiling/applying on that family.

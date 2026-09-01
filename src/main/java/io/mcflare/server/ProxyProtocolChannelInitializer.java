@@ -1,22 +1,30 @@
 package io.mcflare.server;
 
-import io.mcflare.server.mixin.ChannelInitializerInvoker;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import java.net.InetSocketAddress;
 
+/** Wraps Minecraft's normal child initializer, then adds optional loopback PROXY detection. */
 public final class ProxyProtocolChannelInitializer extends ChannelInitializer<Channel> {
-    private final ChannelInitializerInvoker vanilla;
+    private final ChannelHandler vanilla;
 
-    public ProxyProtocolChannelInitializer(ChannelInitializerInvoker vanilla) {
+    public ProxyProtocolChannelInitializer(ChannelHandler vanilla) {
         this.vanilla = vanilla;
     }
 
     @Override
-    protected void initChannel(Channel channel) throws Exception {
-        vanilla.mcflare$invokeInitChannel(channel);
-        if (!(channel.remoteAddress() instanceof InetSocketAddress remote)) return;
+    protected void initChannel(Channel channel) {
+        // Let Netty run Minecraft's own ChannelInitializer through its normal handler lifecycle.
+        // This avoids loader-specific reflective/Mixin access to protected initChannel().
+        channel.pipeline().addLast("mcflare-vanilla-initializer", vanilla);
+        if (!(channel.remoteAddress() instanceof InetSocketAddress)) return;
+        InetSocketAddress remote = (InetSocketAddress) channel.remoteAddress();
         if (remote.getAddress() == null || !remote.getAddress().isLoopbackAddress()) return;
-        channel.pipeline().addAfter("timeout", "mcflare-proxy-detector", new ProxyProtocolDetector());
+        if (channel.pipeline().get("timeout") != null) {
+            channel.pipeline().addAfter("timeout", "mcflare-proxy-detector", new ProxyProtocolDetector());
+        } else {
+            channel.pipeline().addFirst("mcflare-proxy-detector", new ProxyProtocolDetector());
+        }
     }
 }

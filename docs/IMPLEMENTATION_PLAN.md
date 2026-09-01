@@ -27,25 +27,27 @@ Release action: decide/register final IANA WebSocket subprotocol identifier befo
 
 ## Gate 2 - real IP
 
-Implemented/proven on the Fabric adapter (runtime-tested on 1.21.11, 26.1 and 26.2):
+Implemented/proven on the shared Fabric/NeoForge adapter (runtime-tested on both loaders at 1.21.11, 26.1 and 26.2):
 
 - read `CF-Connecting-IPv6` then `CF-Connecting-IP`;
 - optional HAProxy PROXY v1 emission;
-- nonzero opaque source-port workaround for Netty decoder interoperability;
-- same-machine PROXY detector/decoder on Fabric server;
-- apply decoded source address to Minecraft `Connection.address`;
+- opaque nonzero ingress source-port value because Cloudflare does not expose the original player TCP source port;
+- bounded in-project standard PROXY-v1 TCP4/TCP6 parser; no separate Netty HAProxy codec dependency;
+- loopback-only PROXY detector/parser on Fabric and NeoForge servers;
+- apply parsed source address to Minecraft `Connection.address`;
 - gateway metadata logs indicate presence, not raw visitor IP.
 
 Remaining: login/log/API-level assertion that downstream ban/logging surfaces expose the restored IP; IPv6 live test when an IPv6 client path is available.
 
-## Gate 3 - one Fabric artifact
+## Gate 3 - dual-side loader artifacts
 
 Implemented/proven:
 
-- Fabric metadata changed to `environment: "*"`;
-- client mixins remain client-only;
-- server mixins are dedicated-server scoped;
-- same artifact starts a local gateway on dedicated server;
+- Fabric metadata uses `environment: "*"`;
+- Fabric and NeoForge each package the same shared Minecraft adapter source for client + dedicated server;
+- client mixins remain client-only and server mixins are dedicated-server scoped;
+- NeoForge-specific Java is only a tiny `@Mod` marker;
+- the same loader artifact starts a local gateway on dedicated server;
 - local bind failure is non-fatal to Minecraft;
 - generated `config/mcflare.properties` controls enable/listen/max-connections.
 
@@ -88,20 +90,22 @@ Required before stable release:
 
 ## Gate 7 - compatibility expansion
 
-Fabric version-branch reduction is now proven:
+Fabric and NeoForge version-branch reduction is now proven:
 
-- one Java source adapter compiles on 1.21.11, 26.1 and 26.2;
-- 1.21.11 is a separate binary only because it uses the legacy remap/Java-21 packaging boundary;
-- one 26.1-baseline binary is runtime-proven unchanged on both 26.1 and 26.2;
-- CI uses a matrix, not version branches.
+- one shared root Java adapter source compiles/runs on 1.21.11, 26.1 and 26.2 for both loaders;
+- shared root source contains no Fabric/NeoForge imports;
+- 1.21.11 is a separate binary per loader only because of Java-21/mapping/toolchain packaging boundaries;
+- one 26.1-baseline Fabric binary runs unchanged on Fabric 26.1 and 26.2;
+- one SHA-identical 26.1-baseline NeoForge binary runs unchanged on NeoForge 26.1 and 26.2;
+- both loaders pass ordinary direct Status and WSS -> PROXY -> Status;
+- CI uses loader-scoped matrices, not version branches/workflow files.
 
 Next order:
 
-1. Real player full-login/gameplay proof for the rebuilt Fabric artifacts.
+1. Real player full-login/gameplay proof for rebuilt Fabric and/or NeoForge client artifacts.
 2. Quilt compatibility test using the appropriate Fabric artifact.
-3. NeoForge current release adapter with shared core/gateway.
-4. Paper/Purpur server integration using native PROXY protocol.
-5. Demand-driven older Minecraft/Forge targets.
+3. Paper/Purpur server integration using native PROXY protocol.
+4. Demand-driven older Minecraft/Forge targets.
 
 Never fork RFC6455/discovery/gateway logic per loader.
 
@@ -116,7 +120,7 @@ Never fork RFC6455/discovery/gateway logic per loader.
 
 ## Gate 9 - CI/release packaging
 
-Use one workflow with a matrix rather than one workflow file per Minecraft version. Produce loader/version artifacts from shared modules. Verify nested core/gateway/Netty dependency packaging by inspecting the built Fabric JAR and by a clean-server runtime test.
+Use one workflow with loader-scoped matrices rather than one workflow file per Minecraft version. Current CI has six rows: Fabric and NeoForge at 1.21.11, combined 26.1-26.2 release baseline, and 26.2 head compatibility. Produce loader/version artifacts from shared modules. Use explicit project task paths (`:build`, `:neoforge:build`, `:runServer`, `:neoforge:runServer`) so Gradle task-name matching does not execute both loader projects unintentionally.
 
 ## Definition of v1 done
 

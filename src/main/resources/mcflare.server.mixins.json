@@ -3,7 +3,6 @@
   "package": "io.mcflare.server.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ChannelInitializerInvoker",
     "ConnectionAddressAccessor",
     "ServerConnectionListenerMixin",
     "DedicatedServerMixin"

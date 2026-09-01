@@ -184,3 +184,104 @@ The client-side combined-binary claim is supported by identical redirect descrip
 ### CI-matrix parity check
 
 The final three-row GitHub Actions matrix was reproduced locally before commit. The 1.21.11 row used an actual OpenJDK 21 compiler/runtime, while both 26.x rows used OpenJDK 25. All three `clean build` executions passed. A no-argument default build also produced `mcflare-fabric-26.1-26.2-0.1.0-dev.jar` with runtime metadata `minecraft: >=26.1 <26.3`, `java: >=25`, Loader `>=0.18.4`, and embedded Netty HAProxy 4.2.7.
+
+
+## Cross-loader PROXY simplification and NeoForge validation
+
+The previous server adapter depended on Netty's separate HAProxy codec and a Mixin `@Invoker` for `ChannelInitializer.initChannel`. NeoForge runtime testing exposed the invoker as loader-fragile. Both mechanisms were removed.
+
+Current implementation:
+
+- standard HAProxy PROXY protocol v1 remains unchanged on the wire;
+- a loader-independent in-project parser handles the bounded 108-byte ASCII PROXY line;
+- forwarding IPs are parsed as literals only and never resolved through DNS;
+- TCP4 and TCP6 are supported;
+- ordinary direct Minecraft bytes bypass the optional PROXY path;
+- Minecraft's original child `ChannelInitializer` is installed through Netty's normal pipeline lifecycle rather than a Mixin invoker;
+- shared root Minecraft adapter source has no Fabric or NeoForge imports.
+
+Fabric regression after this refactor:
+
+```text
+FABRIC_26_1_POST_NETTY_DIRECT=PASS
+FABRIC_26_1_POST_NETTY_WSS_PROXY_TCP4=PASS
+FABRIC_26_1_POST_NETTY_WSS_PROXY_TCP6=PASS
+```
+
+### NeoForge 26.x
+
+The same root adapter source compiled and ran on NeoForge 26.1 and 26.2. Development runtimes passed ordinary direct Status and integrated WSS -> PROXY -> Status on both.
+
+One combined JAR was then built against the 26.1 baseline:
+
+```text
+mcflare-neoforge-26.1-26.2-0.1.0-dev.jar
+SHA-256: 2db2453f59fc8a3963eb541b4cf6ec02a4880d8579b194b63215d996e6e2b0ae
+```
+
+The exact SHA-identical bytes were installed into clean official standalone NeoForge 26.1 and 26.2 server installations.
+
+```text
+STANDALONE_COMBINED_NEOFORGE_JAR_ON_26_1_DIRECT=PASS
+STANDALONE_COMBINED_NEOFORGE_JAR_ON_26_1_WSS_PROXY=PASS
+STANDALONE_COMBINED_NEOFORGE_JAR_ON_26_2_DIRECT=PASS
+STANDALONE_COMBINED_NEOFORGE_JAR_ON_26_2_WSS_PROXY=PASS
+```
+
+This proves one NeoForge 26.1-26.2 release family is sufficient for the tested server side.
+
+### NeoForge 1.21.11
+
+The same root Java source built with JDK 21, ModDevGradle 2.0.124, NeoForge 21.11.6-beta and Parchment mappings. No 1.21.11-specific Java source was required.
+
+A real production artifact was installed into a clean official standalone NeoForge 1.21.11 server:
+
+```text
+mcflare-neoforge-1.21.11-0.1.0-dev.jar
+SHA-256: 945da6ea2ae69dd80cc93c7456f794b8588e0bd2c3c5bb7be2b6bede70746e11
+```
+
+Results:
+
+```text
+STANDALONE_NEOFORGE_1_21_11_ARTIFACT_DIRECT=PASS
+STANDALONE_NEOFORGE_1_21_11_ARTIFACT_WSS_PROXY_TCP4=PASS
+STANDALONE_NEOFORGE_1_21_11_ARTIFACT_WSS_PROXY_TCP6=PASS
+```
+
+An initial TCP6 harness assertion was a test bug: it assumed one `recv(2)` call must return the entire two-byte WebSocket frame header. Exact-length reads showed the server path was correct.
+
+### Six-row CI parity
+
+The final loader-scoped CI design has three Fabric rows and three NeoForge rows: 1.21.11 release, 26.1-baseline combined release, and direct 26.2 head compatibility for each loader. The exact commands were reproduced sequentially on Oracle with real JDK 21/25 toolchains.
+
+```text
+ALL_6_LOCAL_CI_ROWS=PASS
+```
+
+The earlier Fabric-only three-row matrix was also independently green on GitHub before NeoForge was added.
+
+### Upstream NeoForge/Linux warning
+
+Clean NeoForge standalone servers on this Oracle ARM Linux host emit a Log4j stack trace while Netty probes the unsupported kqueue transport (`Only supported on OSX/BSD`). The servers continue startup normally and MCflare direct/WSS tests pass. This behavior is outside MCflare's removed HAProxy dependency and is recorded as an environment/upstream warning, not an MCflare acceptance failure.
+
+## Final live gateway smoke after cross-loader refactor
+
+The parallel standards-v1 gateway on `10.0.0.18:25588` was restarted using the final shared `core`/`gateway` classes. The production Minecraft listener on `25565` and legacy gateway on `25577` were not restarted or replaced.
+
+The production `Rfc6455Client` then sent a real Minecraft Status request over negotiated `mcflare.v1` WebSockets through both delivery modes:
+
+```text
+mcflare-orange-test.mulearnscet.in /mcflare: JAVA_RFC6455_STATUS=PASS
+mcflare2-test.mulearnscet.in /mcflare: JAVA_RFC6455_STATUS=PASS
+```
+
+The refreshed gateway logged `realIpPresent=true` and `cfRayPresent=true` for both upgrades. Side-by-side legacy and direct regressions also passed:
+
+```text
+Orange /.well-known/mcflare: LEGACY_WSS_STATUS=PASS
+Tunnel /.well-known/mcflare: LEGACY_WSS_STATUS=PASS
+127.0.0.1:25565 direct production Status: PASS
+```
+
+After the probes, the legacy `25577` gateway retained its original PID/start time and all three expected listeners (`25565`, `25577`, `25588`) remained healthy.

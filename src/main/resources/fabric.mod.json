@@ -4,8 +4,12 @@
   "version": "${version}",
   "name": "MCflare",
   "description": "Transparent Minecraft transport over standard WebSocket, for Cloudflare Orange or Tunnel ingress.",
-  "authors": ["Phloraxx"],
-  "contributors": ["HttpRafa (original Modflared project)"],
+  "authors": [
+    "Phloraxx"
+  ],
+  "contributors": [
+    "HttpRafa (original Modflared project)"
+  ],
   "contact": {
     "sources": "https://github.com/Phloraxx/mcflare",
     "issues": "https://github.com/Phloraxx/mcflare/issues"
@@ -13,12 +17,12 @@
   "license": "MIT",
   "icon": "assets/mcflare/icon.png",
   "environment": "*",
-  "entrypoints": {
-    "client": ["io.mcflare.client.McflareClient"]
-  },
   "mixins": [
     "mcflare.mixins.json",
-    {"config": "mcflare.server.mixins.json", "environment": "server"}
+    {
+      "config": "mcflare.server.mixins.json",
+      "environment": "server"
+    }
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",

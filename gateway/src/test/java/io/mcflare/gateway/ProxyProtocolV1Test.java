@@ -17,6 +17,19 @@ class ProxyProtocolV1Test {
     @Test void missingIpDoesNotEmitHeader() throws Exception {
         assertNull(ProxyProtocolV1.encode(null, 43210, 25565));
     }
+    @Test void parsesIpv4AndIpv6WithoutDns() throws Exception {
+        ProxyProtocolV1.Source v4 = ProxyProtocolV1.parse("PROXY TCP4 198.51.100.42 127.0.0.1 43210 25565");
+        assertEquals("198.51.100.42", v4.address().getHostAddress());
+        assertEquals(43210, v4.port());
+        ProxyProtocolV1.Source v6 = ProxyProtocolV1.parse("PROXY TCP6 2001:db8::42 ::1 0 25565");
+        assertTrue(v6.address() instanceof java.net.Inet6Address);
+        assertEquals(0, v6.port());
+    }
+    @Test void rejectsMalformedProxyHeaders() {
+        assertThrows(java.io.IOException.class, () -> ProxyProtocolV1.parse("PROXY TCP4 example.com 127.0.0.1 1 25565"));
+        assertThrows(java.io.IOException.class, () -> ProxyProtocolV1.parse("PROXY UDP4 198.51.100.42 127.0.0.1 1 25565"));
+        assertThrows(java.io.IOException.class, () -> ProxyProtocolV1.parse("PROXY TCP6 198.51.100.42 ::1 1 25565"));
+    }
     @Test void hostnameIsRejectedInsteadOfResolved() {
         assertThrows(java.io.IOException.class,
                 () -> ProxyProtocolV1.encode("localhost", 43210, 25565));

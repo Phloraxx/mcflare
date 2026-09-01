@@ -13,6 +13,6 @@ public abstract class ServerConnectionListenerMixin {
     @Redirect(method = "startTcpServerListener", at = @At(value = "INVOKE",
             target = "Lio/netty/bootstrap/ServerBootstrap;childHandler(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/ServerBootstrap;", remap = false))
     private ServerBootstrap mcflare$installProxyProtocol(ServerBootstrap bootstrap, ChannelHandler vanilla) {
-        return bootstrap.childHandler(new ProxyProtocolChannelInitializer((ChannelInitializerInvoker) vanilla));
+        return bootstrap.childHandler(new ProxyProtocolChannelInitializer(vanilla));
     }
 }

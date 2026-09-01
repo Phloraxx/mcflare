@@ -44,7 +44,7 @@ The gateway accepts one HTTP/WebSocket endpoint, validates `/mcflare` and `mcfla
 
 ### Server adapter
 
-On Fabric, the same JAR can run on the dedicated server. It starts a local gateway and adds a minimal PROXY-protocol decoder to Minecraft's Netty listener so the real visitor address can become the connection remote address.
+On Fabric and NeoForge, the same loader artifact can run on the dedicated server. Both loaders compile the same root Minecraft adapter source. It starts a local gateway and adds a minimal loopback-trusted PROXY-v1 prefix parser to Minecraft's Netty listener so the real visitor address can become the connection remote address. The parser uses only Netty core types already supplied by Minecraft; MCflare does not bundle `netty-codec-haproxy`.
 
 ## One server, multiple Minecraft instances
 
@@ -62,7 +62,7 @@ Orange uses the administrator's existing reverse proxy. Tunnel uses cloudflared'
 
 - WSS protects the client-to-Cloudflare transport; Minecraft's own encryption/authentication remains end-to-end inside the byte stream.
 - The gateway trusts Cloudflare visitor-IP headers only when its ingress is controlled by Cloudflare/reverse-proxy infrastructure.
-- The Fabric server accepts PROXY-protocol metadata only from loopback connections by default.
+- The shared Fabric/NeoForge server adapter accepts PROXY-protocol metadata only from loopback connections by default.
 - Protected gameplay must never depend on a browser challenge or interactive Cloudflare Access flow.
 - MCflare does not hold Cloudflare API tokens, Tunnel tokens, Tunnel UUIDs, or DNS credentials.
 - Tunnel lifecycle is outside MCflare.
@@ -81,7 +81,7 @@ The local TCP hop keeps Minecraft seeing an ordinary TCP connection and leaves t
 
 - Java 25 clean build on macOS restored and passed.
 - Clean build reconstructed and passed on Oracle ARM64: 19 tasks.
-- Same Fabric 26.2 JAR loads in dedicated-server environment.
+- Fabric and NeoForge artifacts load in dedicated-server environments; one shared Java adapter source is proven on 1.21.11, 26.1 and 26.2 for both loaders.
 - Integrated server gateway starts automatically on configured local address.
 - Synthetic Cloudflare `CF-Connecting-IP` -> gateway -> PROXY v1 -> Fabric server -> real Minecraft Status: PASS.
 - True Orange `/mcflare` -> integrated Fabric server -> Status: PASS.
@@ -90,7 +90,7 @@ The local TCP hop keeps Minecraft seeing an ordinary TCP connection and leaves t
 
 ## Remaining release gates
 
-Full online-mode player login through the new `/mcflare` path, ordinary-server regression with the dual-side artifact, sustained gameplay/jitter, multiple concurrent clients, additional loader/version adapters, and final source-IP behavior tests for login/logging/ban APIs remain before stable release.
+Full online-mode player login through the new `/mcflare` path, ordinary external-server player regression, sustained gameplay/jitter, realistic concurrent clients, and final source-IP behavior tests for login/logging/ban APIs remain before stable release. Fabric/NeoForge server-side loader/version gates for 1.21.11/26.1/26.2 are complete.
 
 ## Lazy backend connection
 
