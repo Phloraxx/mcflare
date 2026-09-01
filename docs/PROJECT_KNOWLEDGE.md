@@ -655,3 +655,11 @@ The Oracle acceptance harness ran three actual Fabric 26.1 clients concurrently 
 The named-Tunnel client was then deliberately removed while both Orange clients stayed connected. A fresh named-Tunnel client joined successfully, restoring the three-client state without disturbing the surviving Orange sessions. The final three disconnects were deliberate test shutdowns. This closes the realistic real-client concurrency/churn acceptance gate at three clients. It is not a maximum-load claim: the Oracle software-rendered clients consumed roughly 2.1-2.5 GiB each, so a fourth simultaneous client was intentionally not attempted. The gateway's bounded-capacity/503 behavior remains separately covered by synthetic tests.
 
 Both test routes were restored to `25588`; the isolated `25585/25587` server was stopped; v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel health all passed afterward. Production `25565`, legacy `25577`, and the parallel `25588` process were not replaced.
+
+## 27. Named-Tunnel local connector restart/recovery — 2026-09-01
+
+The isolated Fabric 26.1 acceptance server used `127.0.0.1:25585` and integrated MCflare `10.0.0.18:25587`. Only `mcflare2-test.mulearnscet.in` `/mcflare` was temporarily routed to `25587`; true Orange stayed on `25588` as a live control. A real named-Tunnel client joined as `Player66[/144.24.114.90:52604]`.
+
+Restarting the local named test `cloudflared` container caused the gateway-side WSS stream to reset, the Minecraft server to remove the player cleanly, and the real client to show `Disconnected`; afterward no established gateway/backend socket remained. Once `cloudflared` returned, WSS Status and PufferPanel were healthy, and a fresh real client joined as `Player971[/144.24.114.90:41994]`. This is evidence for local connector restart/recovery only, not a Cloudflare-edge failure test.
+
+The Tunnel ingress was restored to `25588`; the isolated server/client were stopped; v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel all passed. The persistent `25577` and `25588` gateway processes were unchanged.
