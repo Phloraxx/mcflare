@@ -4,6 +4,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,14 +17,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Version/loader-independent zero-config route selection. */
 public final class RouteResolver implements Closeable {
-    private static final long POSITIVE_TTL_MS = 10L * 60L * 1000L;
     private static final long NEGATIVE_TTL_MS = 30L * 1000L;
     private static final int DIRECT_CONNECT_TIMEOUT_MS = 1200;
     private static final int SECURE_PREFERENCE_GRACE_MS = 1500;
     private static final int DISCOVERY_TIMEOUT_MS = 4500;
 
-    private final ConcurrentHashMap<String, ProbeCache> cache = new ConcurrentHashMap<String, ProbeCache>();
+    private final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<String, Long>();
     private final ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory());
+    private final KnownRouteStore knownRoutes;
+
+    public RouteResolver() {
+        this(null);
+    }
+
+    public RouteResolver(Path knownHostsFile) {
+        knownRoutes = new KnownRouteStore(knownHostsFile);
+    }
 
     /** Returns null for ordinary TCP, or a ready local carrier for MCflare. */
     public LoopbackCarrier prepare(String logicalHost, int logicalPort,
@@ -32,12 +41,12 @@ public final class RouteResolver implements Closeable {
         final String host = normalizeHost(logicalHost);
         if (!isProbeCandidate(host)) return null;
         final String key = host + ":" + logicalPort;
+        if (knownRoutes.contains(key)) return carrierFrom(openRequired(host), host, errorHandler);
         final long now = System.currentTimeMillis();
-        ProbeCache cached = cache.get(key);
-
-        if (cached != null && cached.expiresAt > now) {
-            if (!cached.mcflare) return null;
-            return carrierFrom(openRequired(host), host, errorHandler);
+        Long negativeUntil = negativeCache.get(key);
+        if (negativeUntil != null) {
+            if (negativeUntil > now) return null;
+            negativeCache.remove(key, negativeUntil);
         }
 
         CompletableFuture<Rfc6455Client> secure = CompletableFuture.supplyAsync(
@@ -53,8 +62,7 @@ public final class RouteResolver implements Closeable {
                 Rfc6455Client prepared = secure.getNow(null);
                 if (prepared != null) {
                     direct.cancel(true);
-                    cache.put(key, new ProbeCache(true, now + POSITIVE_TTL_MS));
-                    return carrierFrom(prepared, host, errorHandler);
+                    return rememberAndCarrier(prepared, key, host, errorHandler);
                 }
             }
 
@@ -63,28 +71,37 @@ public final class RouteResolver implements Closeable {
                 long secureWait = directReachable ? SECURE_PREFERENCE_GRACE_MS : DISCOVERY_TIMEOUT_MS;
                 Rfc6455Client prepared = await(secure, secureWait);
                 if (prepared != null) {
-                    cache.put(key, new ProbeCache(true, now + POSITIVE_TTL_MS));
-                    return carrierFrom(prepared, host, errorHandler);
+                    return rememberAndCarrier(prepared, key, host, errorHandler);
                 }
             }
         } catch (Exception ignored) {
             Rfc6455Client prepared = await(secure, DISCOVERY_TIMEOUT_MS);
             if (prepared != null) {
-                cache.put(key, new ProbeCache(true, now + POSITIVE_TTL_MS));
-                return carrierFrom(prepared, host, errorHandler);
+                return rememberAndCarrier(prepared, key, host, errorHandler);
             }
         }
 
         closeLateResult(secure);
         direct.cancel(true);
-        cache.put(key, new ProbeCache(false, now + NEGATIVE_TTL_MS));
+        negativeCache.put(key, now + NEGATIVE_TTL_MS);
         return null;
+    }
+
+    private LoopbackCarrier rememberAndCarrier(Rfc6455Client webSocket, String key, String host,
+                                               LoopbackCarrier.ErrorHandler errorHandler) {
+        try {
+            knownRoutes.remember(key);
+            return carrierFrom(webSocket, host, errorHandler);
+        } catch (RuntimeException error) {
+            closeQuietly(webSocket);
+            throw error;
+        }
     }
 
     public void invalidate(String host) {
         final String prefix = normalizeHost(host) + ":";
-        for (String key : cache.keySet()) {
-            if (key.startsWith(prefix)) cache.remove(key);
+        for (String key : negativeCache.keySet()) {
+            if (key.startsWith(prefix)) negativeCache.remove(key);
         }
     }
 
@@ -173,15 +190,6 @@ public final class RouteResolver implements Closeable {
     @Override
     public void close() {
         executor.shutdownNow();
-    }
-
-    private static final class ProbeCache {
-        private final boolean mcflare;
-        private final long expiresAt;
-        private ProbeCache(boolean mcflare, long expiresAt) {
-            this.mcflare = mcflare;
-            this.expiresAt = expiresAt;
-        }
     }
 
     private static final class DaemonThreadFactory implements ThreadFactory {

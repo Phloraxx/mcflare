@@ -453,3 +453,18 @@ A real Fabric 26.1 client joined the named Tunnel as `Player66[/144.24.114.90:52
 After the connector returned, the real Java WSS Status probe again passed against the isolated named-Tunnel endpoint and PufferPanel returned HTTP 200. A completely fresh real Fabric 26.1 client then joined successfully through the same Tunnel as `Player971[/144.24.114.90:41994]`, again with Cloudflare metadata present. This proves bounded disconnect and fresh-client recovery for a local `cloudflared` connector restart. It must not be described as a Cloudflare-edge outage/restart, because Cloudflare infrastructure itself was not restarted.
 
 The fresh client was deliberately stopped, the named `/mcflare` ingress was restored to `25588`, only the named test connector was restarted to load that restored config, and the isolated `25585/25587` server shut down cleanly. Final regression checks passed: v1 Orange and named-Tunnel `/mcflare` each returned the normal 105-byte Status response, both legacy WSS paths passed, direct production Minecraft Status passed, PufferPanel returned HTTP 200, no `25585/25587` listener remained, and the original `25577` and `25588` gateway processes were unchanged.
+
+## Durable positive-route pin and restart downgrade resistance
+
+The client now persists only successfully proven MCflare routes as normalized `host:logicalPort` entries in `~/.mcflare/known-hosts-v1.txt`. Ordinary/direct outcomes are never written; the negative result remains only a short in-memory cache. A loaded positive pin skips direct probing and uses required WSS, so WSS failure is terminal instead of falling back to raw Minecraft TCP.
+
+A real restart downgrade-resistance test was performed with `mcflare-orange-test.mulearnscet.in:25586`. The first real Fabric client learned the route through true Orange WSS. A completely fresh client process then reused the persisted pin while the hostname resolved to a private ordinary Minecraft server where raw `25586` was reachable and WSS `443` was closed. The client failed in the required-WSS path and the ordinary server recorded zero logins/joins.
+
+```text
+REAL_RESTART_DOWNGRADE_REFUSAL=PASS
+PIN_SURVIVES_FAILURE=PASS
+```
+
+Storage failure behavior was tightened before commit. A non-empty malformed persisted pin file is treated as unsafe and fails closed rather than discarding potentially corrupted prior trust. A newly discovered positive route is not inserted into the trusted in-memory set until its durable append succeeds; an append failure therefore cannot be mistaken for a persistent pin. The already-open WSS is closed if persistence fails.
+
+Focused `:core:test` passed after this hardening, including positive persistence across instances, malformed-store fail-closed behavior, failed-append behavior, and the existing persisted-known-route direct-fallback refusal test. `git diff --check` also passed. The expensive real-client restart test was not repeated because the healthy persisted-pin lookup/fail-closed path exercised by that test was not changed; only exceptional storage-failure branches were tightened.

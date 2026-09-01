@@ -38,6 +38,12 @@ Minecraft client
 
 The loader/version adapter intercepts only connection establishment and server-list status connection creation. For a protected route it substitutes the loopback carrier address; ordinary servers continue to use Minecraft's own resolved TCP destination.
 
+### Route discovery and durable positive pins
+
+For an unknown DNS hostname, `RouteResolver` may race standard `wss://<host>/mcflare` discovery against ordinary Minecraft TCP reachability. A successful `mcflare.v1` WebSocket is positive trust and is persisted as `host:logicalPort` in `~/.mcflare/known-hosts-v1.txt`. Only positive MCflare knowledge is durable; ordinary/negative results remain a short in-memory cache.
+
+A persisted pin bypasses discovery and direct probing. The client opens required WSS immediately and fails closed if that WSS path is unavailable, so a previously proven MCflare hostname cannot silently downgrade to raw Minecraft TCP after a client restart. The pin file is intentionally line-oriented and minimal: non-empty corrupt data fails closed, and a newly discovered route is not added to the trusted in-memory set until its durable append succeeds.
+
 ### Gateway
 
 The gateway accepts one HTTP/WebSocket endpoint, validates `/mcflare` and `mcflare.v1`, opens one configured Minecraft backend, and copies bytes bidirectionally. One gateway instance maps to one Minecraft server instance. Hostname routing belongs to Traefik/Caddy/Nginx or cloudflared ingress rules.
