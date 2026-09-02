@@ -1,0 +1,87 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version "${neoforge_moddev_version}"
+}
+
+version = rootProject.version
+group = rootProject.maven_group
+
+def adapterJavaVersion = Integer.parseInt(rootProject.neoforge_java_version.toString())
+def useParchment = rootProject.neoforge_use_parchment.toString().toBoolean()
+
+base {
+    archivesName = "mcflare-neoforge-${rootProject.neoforge_artifact_label}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(adapterJavaVersion)
+    sourceCompatibility = JavaVersion.toVersion(adapterJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(adapterJavaVersion)
+}
+
+neoForge {
+    version = rootProject.neo_version
+    if (useParchment) {
+        parchment {
+            minecraftVersion = rootProject.parchment_minecraft_version
+            mappingsVersion = rootProject.parchment_mappings_version
+        }
+    }
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+        }
+    }
+    mods {
+        mcflare { sourceSet(sourceSets.main) }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir rootProject.file('src/main/java')
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir rootProject.file('src/main/resources')
+            srcDir 'src/main/resources'
+            exclude 'fabric.mod.json'
+        }
+    }
+}
+
+dependencies {
+    implementation project(':core')
+    implementation project(':gateway')
+}
+
+def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    inputs.property 'mod_version', project.version
+    inputs.property 'neo_version_range', rootProject.neo_version_range
+    inputs.property 'minecraft_version_range', rootProject.neoforge_minecraft_version_range
+    expand(
+            mod_version: project.version,
+            neo_version_range: rootProject.neo_version_range,
+            minecraft_version_range: rootProject.neoforge_minecraft_version_range
+    )
+    from 'src/main/templates'
+    into layout.buildDirectory.dir('generated/sources/modMetadata')
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = adapterJavaVersion
+    options.encoding = 'UTF-8'
+}
+
+// core/ and gateway/ are our own loader-neutral modules; merge their classes into the mod JAR.
+tasks.named('jar', Jar).configure {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_mcflare' } }
+    from(rootProject.file('NOTICE.md')) { rename { 'NOTICE_mcflare.md' } }
+    dependsOn project(':core').tasks.named('classes'), project(':gateway').tasks.named('classes')
+    from project(':core').sourceSets.main.output
+    from project(':gateway').sourceSets.main.output
+}

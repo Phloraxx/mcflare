@@ -1,0 +1,37 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'io.mcflare'
+version = rootProject.version
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 8
+}
+
+repositories {
+    mavenCentral()
+}
+
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+dependencies {
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.13.4'
+}
+
+tasks.named('jar', Jar).configure {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_mcflare' } }
+    from(rootProject.file('NOTICE.md')) { rename { 'NOTICE_mcflare.md' } }
+}

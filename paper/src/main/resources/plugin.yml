@@ -1,0 +1,7 @@
+name: MCflare
+version: '${version}'
+main: io.mcflare.paper.McflarePaperPlugin
+api-version: '1.21'
+author: Phloraxx
+description: Transparent Minecraft transport over standard WebSocket.
+load: STARTUP

@@ -1,0 +1,39 @@
+plugins {
+    id 'application'
+}
+
+group = 'io.mcflare'
+version = rootProject.version
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 8
+}
+
+application {
+    mainClass = 'io.mcflare.gateway.McflareGateway'
+}
+
+
+dependencies {
+    implementation project(':core')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.13.4'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.named('jar', Jar).configure {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_mcflare' } }
+    from(rootProject.file('NOTICE.md')) { rename { 'NOTICE_mcflare.md' } }
+}
