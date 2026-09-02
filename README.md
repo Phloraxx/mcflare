@@ -116,6 +116,8 @@ Start with:
 - `docs/COMPATIBILITY.md`
 - `docs/BUILD_MATRIX.md`
 - `docs/STANDARDS_AUDIT.md`
+- `docs/WEBSOCKET_STANDARDS_RELEASE.md`
+- `docs/IANA_SUBPROTOCOL_REGISTRATION.md`
 - `docs/IMPLEMENTATION_PLAN.md`
 - `docs/TEST_EVIDENCE_2026-09-01.md`
 
@@ -123,7 +125,7 @@ Start with:
 
 ## Status
 
-Experimental. One loader-neutral Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11/26.x; the Fabric artifacts are also runtime-proven unchanged on Quilt. Paper and Purpur use one Java-21 plugin JAR across 1.21.11, 26.1.2 and 26.2 with native PROXY support. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed real-client world joins; true Orange has also passed a 31m27s single-session/fresh-chunk burst stability run, and three simultaneous real clients have been proven across Orange + named Tunnel with live client churn. A real external IPv6 client has also proven true-Orange visitor-IP restoration through `PROXY TCP6` and the Fabric parser, while public WSS Status concurrency is characterized to 128 simultaneous connections per delivery path. Authenticated Mojang online-mode proof, actual Cloudflare-edge/network interruption, active-play latency/jitter characterization, and higher-scale real-gameplay load/churn remain before stable v1; a local named-Tunnel connector restart already produces a clean client disconnect and fresh-client recovery.
+Experimental. One loader-neutral Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11/26.x; the Fabric artifacts are also runtime-proven unchanged on Quilt. Paper and Purpur use one Java-21 plugin JAR across 1.21.11, 26.1.2 and 26.2 with native PROXY support. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed real-client world joins; true Orange has also passed a 31m27s single-session/fresh-chunk burst stability run, and three simultaneous real clients have been proven across Orange + named Tunnel with live client churn. A real external IPv6 client has also proven true-Orange visitor-IP restoration through `PROXY TCP6` and the Fabric parser, while public WSS Status concurrency is characterized to 128 simultaneous connections per delivery path. The 30.02-minute active-gameplay latency/jitter characterization is complete. Authenticated Mojang online-mode proof (if required for release acceptance), actual Cloudflare-edge interruption behavior, higher-scale real-gameplay load/churn, and the external IANA subprotocol-registration/publication step remain before stable v1; a local named-Tunnel connector restart and a true-Orange client-network black-hole teardown/recovery test are already proven separately.
 
 ## Attribution
 

@@ -69,14 +69,15 @@ Quick Tunnel was excluded as an acceptance control after a registered/healthy di
 
 ## Gate 5 - regressions
 
-Before commit/cutover:
+Migration and current-state regressions are both recorded:
 
-- legacy `/.well-known/mcflare` test route still works while side-by-side migration rules exist;
-- old named Tunnel fallback route still works;
-- PufferPanel hostname remains healthy after connector restart;
-- direct Minecraft Status to backend remains healthy;
+- during side-by-side migration, the legacy Orange and named-Tunnel `/.well-known/mcflare` routes were proven before retirement;
+- after retirement, both legacy `/.well-known/mcflare` test endpoints return the expected HTTP 404 instead of silently continuing as alternate v1 routes;
+- the retired old `25577` production path returns its expected HTTP 400 response;
+- PufferPanel remains healthy after the named-Tunnel connector restart;
+- direct Minecraft Status to the backend remains healthy;
 - clean Gradle build/tests pass from a clean worktree;
-- no live production Minecraft listener/process is replaced.
+- no live production Minecraft listener/process is replaced by acceptance tests.
 
 ## Gate 6 - full gameplay
 

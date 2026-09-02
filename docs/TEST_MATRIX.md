@@ -54,15 +54,17 @@
 | Three simultaneous real Fabric 26.1 clients (2 Orange + 1 Tunnel), separate-region chunk loads, then Tunnel client replacement while 2 Orange sessions survive | PASS |
 | Real named-Tunnel client during local `cloudflared` restart: clean disconnect, zero residual WSS/backend sockets, connector recovery, fresh real-client rejoin | PASS |
 | Real true-Orange client network black-hole: player disconnect, backend + WSS teardown, gateway slot release, fresh-client recovery | PASS |
-| Final refreshed `25588` gateway: `/mcflare` Orange + Tunnel, legacy paths, and direct production Status | PASS |
+| Historical migration checkpoint: refreshed `25588` gateway with `/mcflare` Orange + Tunnel, legacy paths, and direct production Status | PASS before legacy retirement |
 | Java-client reconnect stress, 10/10 Orange + 10/10 Tunnel | PASS |
 | 40 s pre-data Ping/Pong then Status on same socket, Orange + Tunnel | PASS after lazy-backend fix |
 | Gateway does not open Minecraft backend until first binary data | PASS |
 | Gateway connection bound / HTTP 503 overload / slot reuse | PASS |
 | Gateway operational observability: sanitized CF-Ray, session duration/termination reason, capacity event, no raw forwarded player IP | PASS + JUnit |
 | RFC6455 fragmentation, control interleave, masking and frame bound | PASS + JUnit |
-| Legacy Orange `/.well-known/mcflare` side-by-side route | PASS |
-| Legacy named Tunnel `/.well-known/mcflare` fallback | PASS |
+| Historical migration checkpoint: legacy Orange `/.well-known/mcflare` side-by-side route | PASS before retirement |
+| Historical migration checkpoint: legacy named Tunnel `/.well-known/mcflare` fallback | PASS before retirement |
+| Current retired Orange + named-Tunnel `/.well-known/mcflare` endpoints | PASS — expected HTTP 404 |
+| Current retired old `25577` production path | PASS — expected HTTP 400 |
 | Production direct Minecraft Status | PASS |
 | PufferPanel after named Tunnel connector restart | PASS — HTTP 200 |
 | Quick Tunnel as regression control | INVALID/EXCLUDED — Cloudflare 404/500 before origin |

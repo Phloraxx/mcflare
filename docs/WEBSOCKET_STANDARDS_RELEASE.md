@@ -35,13 +35,15 @@ References: RFC 6455 and RFC 7936.
 
 The IANA WebSocket Subprotocol Name Registry is First-Come-First-Served. As re-checked on 2026-09-02, `mcflare.v1` is not present in the registry.
 
+The identifier decision is now frozen: register the existing `mcflare.v1` token as-is for v1 rather than migrating solely for domain-style naming. RFC 6455 section 1.9's domain-derived naming advice is non-normative; changing the deployed exact-match token would create a protocol migration and invalidate compatibility evidence without a normative requirement.
+
 Before calling the public protocol standards-complete:
 
-1. Publish a stable protocol definition suitable for use as the registry definition/reference.
-2. Decide whether to register the concise existing `mcflare.v1` identifier or migrate before release to a collision-resistant domain-derived identifier as recommended by RFC 6455 section 1.9.
-3. Submit the selected identifier, common name, definition/reference, and change-controller information to IANA.
-4. Re-check the registry immediately before submission because allocation is First-Come-First-Served.
-5. Do not change the identifier after release without an explicit protocol-version migration plan.
+1. The standalone v1 interoperability definition is complete in `docs/V1_PROTOCOL.md`; publish that exact text (or an immutable rendering of it) at a stable public HTTPS URL suitable for the registry definition/reference. The current private repository URL is not sufficient.
+2. Explicitly select the public maintainer/change-controller contact that may be permanently listed by IANA. Do not infer it from local Git metadata.
+3. Re-check the registry immediately before submission because allocation is First-Come-First-Served, including case-only variants per RFC 7936.
+4. Submit the prepared `mcflare.v1` registration package from `docs/IANA_SUBPROTOCOL_REGISTRATION.md` using IANA's General Protocol Registration Request form.
+5. After confirmation, record the registry row/date and do not change the v1 identifier without an explicit protocol-version migration plan.
 
 Registration is an administrative external action and is intentionally not performed by build/test automation.
 
