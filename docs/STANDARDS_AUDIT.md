@@ -41,7 +41,7 @@ The standalone gateway intentionally remains a small bounded RFC6455 implementat
 
 RFC 8615 says new `.well-known` URI suffixes must be registered. v1 therefore uses `/mcflare`.
 
-RFC 6455 creates the IANA WebSocket Subprotocol registry and recommends registration. The v1 identifier decision is now frozen as exact `mcflare.v1`; RFC 6455 section 1.9's domain-derived naming advice is non-normative, so renaming the already-proven token is not justified solely for namespacing. Before stable public release, publish the standalone `V1_PROTOCOL.md` definition at a stable public URL and submit exact `mcflare.v1` to IANA under the First Come First Served registry procedure. RFC 7936 requires case-sensitive matching and directs IANA to refuse case-only duplicates. See `IANA_SUBPROTOCOL_REGISTRATION.md`.
+RFC 6455 creates the IANA WebSocket Subprotocol registry and recommends registration. The v1 identifier decision is now frozen as exact `mcflare.v1`; RFC 6455 section 1.9's domain-derived naming advice is non-normative, so renaming the already-proven token is not justified solely for namespacing. For a hobby release, the standalone `V1_PROTOCOL.md` definition is sufficient. If independent third-party implementations later justify formal registration, exact `mcflare.v1` can be submitted to IANA under the First Come First Served registry procedure. RFC 7936 requires case-sensitive matching and directs IANA to refuse case-only duplicates. See `IANA_SUBPROTOCOL_REGISTRATION.md`.
 
 ## External facts validated during 2026-09-01 review
 

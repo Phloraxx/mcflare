@@ -1,10 +1,12 @@
-# IANA WebSocket Subprotocol Registration Readiness
+# Optional IANA WebSocket Subprotocol Registration Notes
+
+Status: optional future formalization. MCflare does not require IANA registration for its hobby-project release line.
 
 Reviewed: 2026-09-02 (IST)
 
 ## Decision
 
-For stable MCflare v1, keep and register the already-deployed WebSocket subprotocol identifier:
+For MCflare v1, keep the already-deployed WebSocket subprotocol identifier. If the project later needs formal third-party interoperability registration, register this exact identifier:
 
 ```text
 mcflare.v1
@@ -94,9 +96,9 @@ The protocol definition is published at the reference above. The identifier
 is matched case-sensitively by implementations.
 ```
 
-## Submission gate
+## Optional submission checklist
 
-Do not submit until all of the following are true:
+If registration is ever pursued, do not submit until all of the following are true:
 
 1. `docs/V1_PROTOCOL.md` has been reviewed as the exact standalone v1 interoperability definition.
 2. That definition is available at a stable, public HTTPS URL that does not require repository/account access.

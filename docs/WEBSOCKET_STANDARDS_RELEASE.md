@@ -31,13 +31,13 @@ References: RFC 6455 and RFC 7936.
 6. Serialize the closed-state check with frame writes so no data/control frame can queue behind a completed Close.
 7. Add regression tests for mixed-case rejection, protocol-list selection, unsolicited negotiation, received-close echo, and server-initiated close.
 
-## IANA subprotocol registration gate
+## Optional IANA subprotocol registration
 
 The IANA WebSocket Subprotocol Name Registry is First-Come-First-Served. As re-checked on 2026-09-02, `mcflare.v1` is not present in the registry.
 
 The identifier decision is now frozen: register the existing `mcflare.v1` token as-is for v1 rather than migrating solely for domain-style naming. RFC 6455 section 1.9's domain-derived naming advice is non-normative; changing the deployed exact-match token would create a protocol migration and invalidate compatibility evidence without a normative requirement.
 
-Before calling the public protocol standards-complete:
+If MCflare later needs formal third-party interoperability registration:
 
 1. The standalone v1 interoperability definition is complete in `docs/V1_PROTOCOL.md`; publish that exact text (or an immutable rendering of it) at a stable public HTTPS URL suitable for the registry definition/reference. The current private repository URL is not sufficient.
 2. Explicitly select the public maintainer/change-controller contact that may be permanently listed by IANA. Do not infer it from local Git metadata.
@@ -47,12 +47,12 @@ Before calling the public protocol standards-complete:
 
 Registration is an administrative external action and is intentionally not performed by build/test automation.
 
-## Remaining external acceptance boundaries
+## Optional external validation
 
 These are outside the unit/integration suite and must not be replaced by misleading simulations:
 
-- public publication of the frozen protocol definition plus IANA registration of exact `mcflare.v1` is required before calling the wire protocol standards-complete;
-- legitimate authenticated-client validation with `online-mode=true` remains an optional release-policy proof of Mojang session authentication, not a separate MCflare wire mechanism;
+- public protocol publication plus IANA registration of exact `mcflare.v1` is optional future formalization for this hobby project;
+- legitimate authenticated-client validation with `online-mode=true` remains an optional proof of Mojang session authentication, not a separate MCflare wire mechanism;
 - observation of behavior if Cloudflare itself terminates an established edge WebSocket during an edge deployment/restart remains distinct from the already-proven local connector restart and client-network-loss tests.
 
 Larger graphical/world-generation concurrency on production-shaped hardware is optional performance characterization. MCflare transport/session concurrency is already proven at 16 simultaneous GAME-state clients plus four 16-client churn cohorts on each public delivery mode.

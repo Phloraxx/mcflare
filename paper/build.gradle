@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-version = "${rootProject.mod_version}-dev"
+version = rootProject.version
 group = rootProject.maven_group
 
 base {
@@ -43,6 +43,8 @@ processResources {
 
 // core/ and gateway/ are our own loader-neutral modules; merge them into the plugin JAR.
 tasks.named('jar', Jar).configure {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_mcflare' } }
+    from(rootProject.file('NOTICE.md')) { rename { 'NOTICE_mcflare.md' } }
     dependsOn project(':core').tasks.named('classes'), project(':gateway').tasks.named('classes')
     from project(':core').sourceSets.main.output
     from project(':gateway').sourceSets.main.output

@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'io.mcflare'
-version = '0.1.0-dev'
+version = rootProject.version
 
 repositories {
     mavenCentral()
@@ -31,4 +31,9 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+tasks.named('jar', Jar).configure {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_mcflare' } }
+    from(rootProject.file('NOTICE.md')) { rename { 'NOTICE_mcflare.md' } }
 }

@@ -610,7 +610,7 @@ Real visitor IP is now a v1 requirement. Cloudflare's `CF-Connecting-IP` / `CF-C
 
 Oracle reconstruction from handoff commit `747fc9f88254d87451e6df8a38521d518a845a6f` passed a Java-25 clean build, local synthetic source-IP/PROXY Status, true Orange `/mcflare` Status, named Tunnel `/mcflare` Status, and combined live Cloudflare -> PROXY -> integrated Fabric Status for both ingress modes. Legacy routes and direct production/dev Minecraft remained healthy. Quick Tunnel was excluded after repeated edge 404/500 responses that never reached origin despite a healthy registered connector.
 
-See `TEST_EVIDENCE_2026-09-01.md` for exact proof and `IMPLEMENTATION_PLAN.md` for the remaining release gates. The same day, the rebuilt Fabric 26.1 real client subsequently closed the `/mcflare` world-join gate on both Orange and named Tunnel; see the following section.
+See `TEST_EVIDENCE_2026-09-01.md` for exact proof and `IMPLEMENTATION_PLAN.md` for the gates that still remained at this checkpoint. The same day, the rebuilt Fabric 26.1 real client subsequently closed the `/mcflare` world-join gate on both Orange and named Tunnel; see the following section.
 
 ## 22. Oracle real-client `/mcflare` acceptance — 2026-09-01
 
@@ -618,7 +618,7 @@ A real Minecraft client no longer requires the Mac test host. An isolated ARM64 
 
 Using source commit `7e542e9354948b41f7d9188627d4f4661484c51e`, Minecraft Quick Play joined an isolated Fabric 26.1 server through `mcflare-orange-test.mulearnscet.in` and then `mcflare2-test.mulearnscet.in`. Both paths used `/mcflare` + `mcflare.v1`, the real client Mixins/RouteResolver/LoopbackCarrier, Cloudflare, the integrated gateway, PROXY v1 and the normal Minecraft login/configuration/game phases. Both reached `joined the game`.
 
-The gateway reported `realIpPresent=true cfRayPresent=true` on both upgrades. Minecraft logged the client as `144.24.114.90` on both joins, independently matching Oracle's public IPv4. This closes the real-client full-transport and login-log IP proof for true Orange and named Tunnel. The isolated server was intentionally offline-mode; authenticated Mojang online-mode remains a distinct optional/release acceptance gate.
+The gateway reported `realIpPresent=true cfRayPresent=true` on both upgrades. Minecraft logged the client as `<redacted-public-ip>` on both joins, independently matching Oracle's public IPv4. This closes the real-client full-transport and login-log IP proof for true Orange and named Tunnel. The isolated server was intentionally offline-mode; authenticated Mojang online-mode remains a distinct optional validation proof.
 
 After the proof, both test `/mcflare` routes were restored to parallel gateway `25588`, the temporary `25585/25587` server was stopped, named test cloudflared was restarted, and v1 Orange/Tunnel Status, both legacy WSS paths, direct production Minecraft Status and PufferPanel health all passed. Production `25565` and legacy `25577` were not restarted.
 
@@ -626,7 +626,7 @@ After the proof, both test `/mcflare` routes were restored to parallel gateway `
 
 The real Fabric 26.1 client with MCflare installed joined `ordinary-minecraft.test:25586`, a clean Fabric server with zero MCflare server mods. Minecraft logged `Player438[/127.0.0.1:33416]` and the player joined normally. This closes ordinary Quick Play/Direct Connect compatibility. The actual graphical Multiplayer pinger was subsequently exercised too; see section 24.
 
-The source-IP proof was then strengthened beyond logging. Through true Orange, Minecraft saw `Player393[/144.24.114.90:53422]`. Native `ban-ip 144.24.114.90` immediately kicked that player, and a fresh real MCflare-equipped client was rejected as `Player44 (/144.24.114.90:42538)` because the IP was banned. The address was pardoned afterward and the ban file returned empty.
+The source-IP proof was then strengthened beyond logging. Through true Orange, Minecraft saw `Player393[/<redacted-public-ip>:53422]`. Native `ban-ip <redacted-public-ip>` immediately kicked that player, and a fresh real MCflare-equipped client was rejected as `Player44 (/<redacted-public-ip>:42538)` because the IP was banned. The address was pardoned afterward and the ban file returned empty.
 
 The temporary `25585/25587` test services were stopped, Orange `/mcflare` was restored to `25588`, and v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel all passed. This confirms that `CF-Connecting-IP -> PROXY v1 -> Connection.address` is sufficient for Minecraft's native IP-ban behavior without custom identity packets.
 
@@ -640,7 +640,7 @@ Minecraft's real `ServerStatusPinger` then opened a loopback TCP connection to `
 
 The isolated Fabric 26.1 acceptance server again used `127.0.0.1:25585` with its integrated gateway on `10.0.0.18:25587`. Only the test `/mcflare` routes were temporarily moved from the parallel `25588` gateway to `25587`; production Minecraft `25565` and legacy gateway `25577` were not replaced. Both public hostnames returned the isolated server's distinct 125-byte Status response before the real-client run.
 
-The real Fabric client joined true Orange at 14:10:04 as `Player6[/144.24.114.90:39352]`; the gateway had accepted exactly one gameplay upgrade at 14:09:58 with both Cloudflare metadata fields present. An initial unsafe harness teleport caused the player to drown, but the transport remained connected. The player was switched to spectator, respawned, and Minecraft reported health `20.0f`.
+The real Fabric client joined true Orange at 14:10:04 as `Player6[/<redacted-public-ip>:39352]`; the gateway had accepted exactly one gameplay upgrade at 14:09:58 with both Cloudflare metadata fields present. An initial unsafe harness teleport caused the player to drown, but the transport remained connected. The player was switched to spectator, respawned, and Minecraft reported health `20.0f`.
 
 The controlled burst phase ran from 14:32:43 through 14:37:50. Seven high-altitude teleports targeted `(2000,2000)`, `(6000,-6000)`, `(-12000,8000)`, `(24000,24000)`, `(-32000,-16000)`, `(48000,12000)` and `(-64000,64000)`. Each forced fresh-region work; the server recorded world-generation stalls ranging from about 3.3 s to 6.9 s. After the final burst Minecraft still reported health `20.0f` and one player online.
 
@@ -650,7 +650,7 @@ After restoration, both `/mcflare` routes again hit `25588` and returned 105-byt
 
 ## 26. Three-real-client concurrency and live churn — 2026-09-01
 
-The Oracle acceptance harness ran three actual Fabric 26.1 clients concurrently through one isolated MCflare gateway: two via true Orange and one via the named HTTP Tunnel. Minecraft logged all three using the restored visitor IPv4 `144.24.114.90` with independent source ports, while the gateway held three concurrent WSS sessions and three backend Minecraft streams. All clients remained connected while they were spread into three distant regions; simultaneous world generation caused a ~21 s server tick stall but no MCflare connection loss.
+The Oracle acceptance harness ran three actual Fabric 26.1 clients concurrently through one isolated MCflare gateway: two via true Orange and one via the named HTTP Tunnel. Minecraft logged all three using the restored visitor IPv4 `<redacted-public-ip>` with independent source ports, while the gateway held three concurrent WSS sessions and three backend Minecraft streams. All clients remained connected while they were spread into three distant regions; simultaneous world generation caused a ~21 s server tick stall but no MCflare connection loss.
 
 The named-Tunnel client was then deliberately removed while both Orange clients stayed connected. A fresh named-Tunnel client joined successfully, restoring the three-client state without disturbing the surviving Orange sessions. The final three disconnects were deliberate test shutdowns. This closes the realistic real-client concurrency/churn acceptance gate at three clients. It is not a maximum-load claim: the Oracle software-rendered clients consumed roughly 2.1-2.5 GiB each, so a fourth simultaneous client was intentionally not attempted. The gateway's bounded-capacity/503 behavior remains separately covered by synthetic tests.
 
@@ -658,9 +658,9 @@ Both test routes were restored to `25588`; the isolated `25585/25587` server was
 
 ## 27. Named-Tunnel local connector restart/recovery — 2026-09-01
 
-The isolated Fabric 26.1 acceptance server used `127.0.0.1:25585` and integrated MCflare `10.0.0.18:25587`. Only `mcflare2-test.mulearnscet.in` `/mcflare` was temporarily routed to `25587`; true Orange stayed on `25588` as a live control. A real named-Tunnel client joined as `Player66[/144.24.114.90:52604]`.
+The isolated Fabric 26.1 acceptance server used `127.0.0.1:25585` and integrated MCflare `10.0.0.18:25587`. Only `mcflare2-test.mulearnscet.in` `/mcflare` was temporarily routed to `25587`; true Orange stayed on `25588` as a live control. A real named-Tunnel client joined as `Player66[/<redacted-public-ip>:52604]`.
 
-Restarting the local named test `cloudflared` container caused the gateway-side WSS stream to reset, the Minecraft server to remove the player cleanly, and the real client to show `Disconnected`; afterward no established gateway/backend socket remained. Once `cloudflared` returned, WSS Status and PufferPanel were healthy, and a fresh real client joined as `Player971[/144.24.114.90:41994]`. This is evidence for local connector restart/recovery only, not a Cloudflare-edge failure test.
+Restarting the local named test `cloudflared` container caused the gateway-side WSS stream to reset, the Minecraft server to remove the player cleanly, and the real client to show `Disconnected`; afterward no established gateway/backend socket remained. Once `cloudflared` returned, WSS Status and PufferPanel were healthy, and a fresh real client joined as `Player971[/<redacted-public-ip>:41994]`. This is evidence for local connector restart/recovery only, not a Cloudflare-edge failure test.
 
 The Tunnel ingress was restored to `25588`; the isolated server/client were stopped; v1 Orange/Tunnel, both legacy paths, direct production Status and PufferPanel all passed. The persistent `25577` and `25588` gateway processes were unchanged.
 

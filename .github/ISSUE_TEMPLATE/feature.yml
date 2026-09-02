@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a focused improvement to MCflare
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What player/admin/developer problem exists today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Area
+      options:
+        - Player UX / discovery
+        - Gateway / transport
+        - Real player IP / PROXY
+        - Fabric / Quilt
+        - NeoForge
+        - Paper / Purpur
+        - Deployment / documentation
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: architecture
+    attributes:
+      label: Architecture check
+      options:
+        - label: This does not require putting Cloudflare/Tunnel credentials or cloudflared inside the player mod.
+          required: true
+        - label: If this changes the mcflare.v1 wire contract, I have called that out explicitly.
+          required: true

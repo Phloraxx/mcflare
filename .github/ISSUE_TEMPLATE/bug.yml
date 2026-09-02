@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible MCflare connection, compatibility, or gateway problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Do not paste Cloudflare credentials, Minecraft/Microsoft auth tokens, or raw player public IP addresses.
+  - type: input
+    id: mcflare
+    attributes:
+      label: MCflare version / artifact
+      description: Release version, commit SHA, or exact JAR filename.
+      placeholder: mcflare-fabric-26.1-26.2-1.0.0.jar
+    validations:
+      required: true
+  - type: input
+    id: minecraft
+    attributes:
+      label: Minecraft version
+      placeholder: 26.1
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Fabric
+        - Quilt
+        - NeoForge
+        - Paper
+        - Purpur
+        - Other / unsure
+    validations:
+      required: true
+  - type: dropdown
+    id: route
+    attributes:
+      label: Connection path
+      options:
+        - Cloudflare Orange proxy
+        - Cloudflare named Tunnel
+        - Ordinary/direct Minecraft server
+        - Local/integration test
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include expected behavior and the smallest reliable reproduction.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant redacted logs
+      description: Keep this focused. Redact public IPs, credentials, tokens, and unrelated production data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked the installation/compatibility/troubleshooting documentation.
+          required: true
+        - label: I removed credentials, authentication tokens, and raw player public IPs from this report.
+          required: true

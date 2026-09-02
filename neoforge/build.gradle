@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version "${neoforge_moddev_version}"
 }
 
-version = "${rootProject.mod_version}-dev"
+version = rootProject.version
 group = rootProject.maven_group
 
 def adapterJavaVersion = Integer.parseInt(rootProject.neoforge_java_version.toString())
@@ -58,11 +58,11 @@ dependencies {
 }
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
-    inputs.property 'mod_version', rootProject.mod_version
+    inputs.property 'mod_version', project.version
     inputs.property 'neo_version_range', rootProject.neo_version_range
     inputs.property 'minecraft_version_range', rootProject.neoforge_minecraft_version_range
     expand(
-            mod_version: rootProject.mod_version,
+            mod_version: project.version,
             neo_version_range: rootProject.neo_version_range,
             minecraft_version_range: rootProject.neoforge_minecraft_version_range
     )
@@ -79,6 +79,8 @@ tasks.withType(JavaCompile).configureEach {
 
 // core/ and gateway/ are our own loader-neutral modules; merge their classes into the mod JAR.
 tasks.named('jar', Jar).configure {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_mcflare' } }
+    from(rootProject.file('NOTICE.md')) { rename { 'NOTICE_mcflare.md' } }
     dependsOn project(':core').tasks.named('classes'), project(':gateway').tasks.named('classes')
     from project(':core').sourceSets.main.output
     from project(':gateway').sourceSets.main.output

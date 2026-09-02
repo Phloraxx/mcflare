@@ -1,0 +1,222 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to embed in dry-run artifacts (for example 1.0.0-rc.1)
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fabric:
+    name: Fabric ${{ matrix.artifact }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - java: '21'
+            minecraft: '1.21.11'
+            minecraft_dependency: '~1.21.11'
+            loader: '0.18.2'
+            loom: '1.14-SNAPSHOT'
+            mappings: 'true'
+            artifact: '1.21.11'
+          - java: '25'
+            minecraft: '26.1'
+            minecraft_dependency: '>=26.1 <26.3'
+            loader: '0.18.4'
+            loom: '1.15-SNAPSHOT'
+            mappings: 'false'
+            artifact: '26.1-26.2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Resolve release version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "invalid release version: $VERSION" >&2; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Build Fabric release artifact
+        run: >-
+          ./gradlew --no-daemon
+          :core:clean :gateway:clean :clean
+          :core:build :gateway:build :build
+          -Prelease_version="$VERSION"
+          -Pminecraft_version="${{ matrix.minecraft }}"
+          -Pminecraft_dependency="${{ matrix.minecraft_dependency }}"
+          -Ploader_version="${{ matrix.loader }}"
+          -Ploom_version="${{ matrix.loom }}"
+          -Padapter_java_version="${{ matrix.java }}"
+          -Puse_mojang_mappings="${{ matrix.mappings }}"
+          -Partifact_label="${{ matrix.artifact }}"
+      - name: Stage binary
+        run: |
+          mkdir -p dist
+          cp "build/libs/mcflare-fabric-${{ matrix.artifact }}-${VERSION}.jar" dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcflare-fabric-${{ matrix.artifact }}
+          path: dist/*.jar
+          if-no-files-found: error
+
+  neoforge:
+    name: NeoForge ${{ matrix.artifact }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - java: '21'
+            moddev: '2.0.124'
+            neo: '21.11.6-beta'
+            neo_range: '[21.11.6-beta,)'
+            minecraft_range: '[1.21.11]'
+            artifact: '1.21.11'
+            parchment: 'true'
+            fabric_minecraft: '1.21.11'
+            fabric_dependency: '~1.21.11'
+            fabric_loader: '0.18.2'
+            fabric_loom: '1.14-SNAPSHOT'
+            fabric_mappings: 'true'
+          - java: '25'
+            moddev: '2.0.141'
+            neo: '26.1.0.1-beta'
+            neo_range: '[26.1.0.1-beta,)'
+            minecraft_range: '[26.1,26.3)'
+            artifact: '26.1-26.2'
+            parchment: 'false'
+            fabric_minecraft: '26.1'
+            fabric_dependency: '>=26.1 <26.3'
+            fabric_loader: '0.18.4'
+            fabric_loom: '1.15-SNAPSHOT'
+            fabric_mappings: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Resolve release version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "invalid release version: $VERSION" >&2; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Build NeoForge release artifact
+        run: >-
+          ./gradlew --no-daemon
+          :core:clean :gateway:clean :neoforge:clean
+          :core:build :gateway:build :neoforge:build
+          -Prelease_version="$VERSION"
+          -Pneoforge_moddev_version="${{ matrix.moddev }}"
+          -Pneo_version="${{ matrix.neo }}"
+          -Pneo_version_range="${{ matrix.neo_range }}"
+          -Pneoforge_minecraft_version_range="${{ matrix.minecraft_range }}"
+          -Pneoforge_java_version="${{ matrix.java }}"
+          -Pneoforge_artifact_label="${{ matrix.artifact }}"
+          -Pneoforge_use_parchment="${{ matrix.parchment }}"
+          -Pminecraft_version="${{ matrix.fabric_minecraft }}"
+          -Pminecraft_dependency="${{ matrix.fabric_dependency }}"
+          -Ploader_version="${{ matrix.fabric_loader }}"
+          -Ploom_version="${{ matrix.fabric_loom }}"
+          -Padapter_java_version="${{ matrix.java }}"
+          -Puse_mojang_mappings="${{ matrix.fabric_mappings }}"
+          -Partifact_label="${{ matrix.artifact }}"
+      - name: Stage binary
+        run: |
+          mkdir -p dist
+          cp "neoforge/build/libs/mcflare-neoforge-${{ matrix.artifact }}-${VERSION}.jar" dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcflare-neoforge-${{ matrix.artifact }}
+          path: dist/*.jar
+          if-no-files-found: error
+
+  paper:
+    name: Paper / Purpur
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Resolve release version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          [[ "$VERSION" =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "invalid release version: $VERSION" >&2; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Build Paper/Purpur release artifact
+        run: ./gradlew --no-daemon :core:build :gateway:build :paper:clean :paper:build -Prelease_version="$VERSION"
+      - name: Stage binary
+        run: |
+          mkdir -p dist
+          cp "paper/build/libs/mcflare-paper-${VERSION}.jar" dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcflare-paper
+          path: dist/*.jar
+          if-no-files-found: error
+
+  bundle:
+    name: Release bundle
+    needs: [fabric, neoforge, paper]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: mcflare-*
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum *.jar | sort -k2 > SHA256SUMS.txt
+      - name: Show release bundle
+        run: ls -lh dist && cat dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcflare-release-bundle
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "MCflare $VERSION"

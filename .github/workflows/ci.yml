@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   fabric:
     name: ${{ matrix.name }}
@@ -46,7 +50,7 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
-          cache: gradle
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build and test Fabric
         run: >-
           ./gradlew --no-daemon
@@ -113,7 +117,7 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
-          cache: gradle
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build and test NeoForge
         run: >-
           ./gradlew --no-daemon
@@ -143,6 +147,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build and test Paper plugin
         run: ./gradlew --no-daemon :core:build :gateway:build :paper:clean :paper:build

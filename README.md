@@ -1,132 +1,160 @@
 # MCflare
 
-MCflare carries the normal Minecraft Java TCP byte stream over a standard secure WebSocket so a Minecraft hostname can use Cloudflare's ordinary HTTP/WebSocket infrastructure without requiring `cloudflared`, WARP, a VPN, or a custom launcher on the player's computer.
+![MCflare icon](src/main/resources/assets/mcflare/icon.png)
 
-## Player experience
+[![CI](https://github.com/Phloraxx/mcflare/actions/workflows/ci.yml/badge.svg)](https://github.com/Phloraxx/mcflare/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-```text
-Install the MCflare artifact for your Minecraft loader/version
--> add play.example.com normally
--> Join Server
-```
+**Transparent Minecraft Java transport over Cloudflare WebSockets.**
 
-MCflare stays transparent for ordinary Minecraft servers.
-
-## v1 architecture
+MCflare lets players join a Minecraft server with the normal hostname while the Minecraft TCP byte stream travels inside a standards-based WebSocket through Cloudflare. Players do not run `cloudflared`, a VPN, WARP, or a custom launcher.
 
 ```text
 Minecraft client
-  -> MCflare client adapter
-  -> WSS /mcflare (`mcflare.v1`)
-  -> Cloudflare
-       -> Orange -> reverse proxy ----┐
-       -> Tunnel -> cloudflared ------┤
-                                      v
-                              MCflare gateway
-                                      |
-                         optional PROXY protocol v1
-                                      |
-                              Minecraft TCP server
+    │
+    │ normal Join Server UX
+    ▼
+MCflare client adapter
+    │  wss://play.example.com/mcflare
+    │  Sec-WebSocket-Protocol: mcflare.v1
+    ▼
+Cloudflare ── Orange proxy or named Tunnel
+    ▼
+MCflare gateway
+    │  Minecraft TCP bytes + optional PROXY v1
+    ▼
+Minecraft server
 ```
 
-Orange and Tunnel use the exact same MCflare code and wire protocol. They differ only in how Cloudflare reaches the local HTTP/WebSocket gateway.
+## Player experience
 
-- **Orange:** the administrator supplies normal HTTPS ingress/reverse proxying to the MCflare listener.
-- **Tunnel:** the administrator runs `cloudflared` externally and maps the hostname to the same MCflare HTTP listener.
+1. Install the MCflare JAR for your loader and Minecraft version.
+2. Add `play.example.com` to Minecraft normally.
+3. Click **Join Server**.
 
-MCflare itself has no Tunnel token, Cloudflare API token, DNS client, cloudflared child process, certificate manager, or Orange/Tunnel mode.
+There is no MCflare account, token, proxy address, or separate connection UI. Ordinary non-MCflare servers continue to use normal Minecraft TCP.
 
-## Wire protocol
+## Server quick start
 
-The client opens:
+| Platform | MCflare artifact | Side |
+|---|---|---|
+| Fabric | `mcflare-fabric-…jar` | client + server |
+| Quilt | Fabric artifact | client + server |
+| NeoForge | `mcflare-neoforge-…jar` | client + server |
+| Paper | `mcflare-paper-…jar` | server only |
+| Purpur | Paper artifact | server only |
+
+Install the server artifact, configure the MCflare gateway listener, then route **only** `/mcflare` from your Minecraft hostname to that listener through either Cloudflare's normal proxied HTTP/WebSocket path or a named Cloudflare Tunnel.
+
+See **[Installation](docs/INSTALLATION.md)** and **[Deployment](docs/DEPLOYMENT.md)** for the complete setup.
+
+## Supported Minecraft families
+
+| Loader/platform | Minecraft | Java | Artifact strategy |
+|---|---:|---:|---|
+| Fabric / Quilt | 1.21.11 | 21 | dedicated JAR |
+| Fabric / Quilt | 26.1–26.2 | 25 | one shared JAR |
+| NeoForge | 1.21.11 | 21 | dedicated JAR |
+| NeoForge | 26.1–26.2 | 25 | one shared JAR |
+| Paper / Purpur | 1.21.11, 26.1.x, 26.2 | 21 | one server plugin JAR |
+
+The same Fabric or NeoForge JAR is used on the client and dedicated server. Client-only and server-only hooks are isolated internally.
+
+## Cloudflare deployment choices
+
+**Orange proxy** and **named Tunnel** are deployment choices, not different MCflare protocols.
+
+- **Orange:** Cloudflare proxies HTTPS/WebSocket traffic to your reverse proxy, which routes `/mcflare` to the gateway. Protect the origin separately; proxied DNS alone is not an origin-firewall policy.
+- **Named Tunnel:** `cloudflared` runs on server infrastructure and maps `/mcflare` to the same gateway. Nothing Tunnel-specific is shipped to players.
+
+Both use exactly:
 
 ```text
-wss://play.example.com/mcflare
+wss://<minecraft-host>/mcflare
 Sec-WebSocket-Protocol: mcflare.v1
 ```
 
-A compatible gateway returns HTTP 101 and echoes `mcflare.v1`. That successful WebSocket is immediately retained as the gameplay carrier. Binary WebSocket payloads are the ordered Minecraft TCP byte stream; there is no MCflare gameplay framing, packet parser, HELLO, JSON capability protocol, compression, multiplexer, or UDP layer.
+Binary WebSocket payloads are the ordered Minecraft TCP byte stream. There is no custom gameplay framing or JSON control protocol.
 
 ## Real player IP
 
-Cloudflare supplies the visitor address to the HTTP/WebSocket origin in `CF-Connecting-IP` (and, when relevant, `CF-Connecting-IPv6`). MCflare can translate that standard HTTP metadata into standard HAProxy PROXY protocol v1 before the Minecraft stream.
+Cloudflare terminates the public WebSocket, so the gateway can translate Cloudflare visitor metadata into standard HAProxy **PROXY protocol v1** before the Minecraft stream. IPv4 and IPv6 restoration are tested.
 
-The shared Fabric/NeoForge server adapter includes a minimal loopback-trusted PROXY-v1 parser. The same Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11, 26.1 and 26.2. MCflare no longer bundles Netty's HAProxy codec; the standard text header is parsed by a bounded in-project parser. Paper and Purpur use their native HAProxy PROXY-protocol support, so the Paper plugin needs no Minecraft/Netty injection at all.
+Fabric/Quilt and NeoForge use MCflare's bounded loopback-trusted PROXY-v1 parser. Paper/Purpur use their native HAProxy PROXY support.
 
-## Same loader JAR on client and server
+See **[Real player IP](docs/REAL_IP.md)** for the trust boundary and server configuration.
 
-Each Fabric or NeoForge release artifact is intended for both physical environments. Client connection hooks remain client-only; server gateway/PROXY hooks remain dedicated-server-only. For both loaders, current testing collapses 26.1 and 26.2 into one binary JAR; 1.21.11 remains a separate Java-21/toolchain artifact. Different artifacts are needed only at genuine loader/runtime boundaries, not because client and server require separate downloads.
+## Downloads and releases
 
-Tested download families are therefore only:
+There is not yet an official GitHub Release for the rebuilt MCflare v1 line. GitHub Releases will be the authoritative source for current MCflare binaries.
 
-```text
-mcflare-fabric-1.21.11.jar      # Fabric + Quilt, client/server
-mcflare-fabric-26.1-26.2.jar    # Fabric + Quilt, client/server
-mcflare-neoforge-1.21.11.jar    # NeoForge, client/server
-mcflare-neoforge-26.1-26.2.jar  # NeoForge, client/server
-mcflare-paper.jar               # Paper + Purpur, server only
-```
+Release builds are produced by the repository's tag/manual release workflow. A release bundle contains the five supported binary families plus `SHA256SUMS.txt`.
 
-## Scope
+See **[Release process](docs/RELEASE.md)**.
 
-MCflare transports **only Minecraft's own Java connection**.
+## What MCflare intentionally does not do
 
-Packets already inside that connection, including mod/plugin custom payloads, are transparent. Separate sockets opened by mods remain outside MCflare. Voice chat UDP, web maps, generic TCP/UDP services, VPN behavior and arbitrary side channels are intentionally not part of v1.
+MCflare transports only Minecraft's own Java connection. It does not provide:
 
-## Modules
+- a central MCflare relay/SaaS service;
+- Cloudflare API or Tunnel credentials inside the mod;
+- `cloudflared` on player machines;
+- voice-chat UDP or other side-channel tunnelling;
+- VPN/WARP functionality;
+- automatic continuation of an already-broken Minecraft session.
 
-- `core/` — Java-8-compatible RFC6455 client, route resolver and loopback carrier.
-- `gateway/` — Java-8-compatible HTTP/WebSocket-to-Minecraft gateway plus standard PROXY-v1 codec.
-- root Fabric module — packages the shared Minecraft adapter for Fabric; the same artifacts are runtime-proven on Quilt Loader.
-- `neoforge/` — packages the same shared Minecraft adapter for NeoForge; loader-specific Java is only a tiny `@Mod` marker.
-- `paper/` — one Java-21 server plugin for Paper and Purpur 1.21.11 through 26.2; it only starts/stops the shared gateway and relies on the platform's native PROXY support.
+If a WebSocket dies, Minecraft disconnects normally and the player reconnects with a fresh session.
 
-## Build
+## Documentation
 
-The repository defaults to the combined 26.1-26.2 family and requires Java 25 for current-generation loader artifacts. Use loader-qualified tasks in this multi-project build.
+**Start here:**
 
-Fabric:
+- [Installation](docs/INSTALLATION.md)
+- [Deployment: Orange and named Tunnel](docs/DEPLOYMENT.md)
+- [Compatibility](docs/COMPATIBILITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release process](docs/RELEASE.md)
+- [Migrating from Modflared](docs/MIGRATION_FROM_MODFLARED.md)
+- [Documentation index](docs/README.md)
+
+**Protocol / implementation:**
+
+- [v1 architecture](docs/V1_ARCHITECTURE.md)
+- [v1 wire protocol](docs/V1_PROTOCOL.md)
+- [Real-IP design](docs/REAL_IP.md)
+- [Build matrix](docs/BUILD_MATRIX.md)
+
+Detailed experiments and test evidence are retained under `docs/` for maintainers, but are not required reading for normal installation.
+
+## Building
+
+Use the Gradle wrapper. The default current-generation Fabric build uses Java 25.
 
 ```bash
 ./gradlew --no-daemon :core:build :gateway:build :build
-```
-
-NeoForge:
-
-```bash
 ./gradlew --no-daemon :core:build :gateway:build :neoforge:build
-```
-
-Paper/Purpur plugin:
-
-```bash
 ./gradlew --no-daemon :core:build :gateway:build :paper:build
 ```
 
-The same shared source also builds the Java-21 1.21.11 Fabric and NeoForge artifacts through the CI/build matrix. See `docs/BUILD_MATRIX.md`. Avoid unqualified `runServer`; use `:runServer` for Fabric or `:neoforge:runServer` for NeoForge.
+The complete version/loader matrix is enforced in GitHub Actions. See [BUILD_MATRIX.md](docs/BUILD_MATRIX.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Engineering docs
+## Project status
 
-Start with:
+MCflare is a hobby project approaching its first release of the rebuilt architecture. The core transport, downgrade-resistant route pinning, real-IP handoff, loader/platform matrix, long-session behavior, failure cleanup, and higher-scale full-protocol GAME-state concurrency have all been exercised.
 
-- `docs/V1_ARCHITECTURE.md`
-- `docs/V1_PROTOCOL.md`
-- `docs/REAL_IP.md`
-- `docs/DEPLOYMENT.md`
-- `docs/COMPATIBILITY.md`
-- `docs/BUILD_MATRIX.md`
-- `docs/STANDARDS_AUDIT.md`
-- `docs/WEBSOCKET_STANDARDS_RELEASE.md`
-- `docs/IANA_SUBPROTOCOL_REGISTRATION.md`
-- `docs/IMPLEMENTATION_PLAN.md`
-- `docs/TEST_EVIDENCE_2026-09-01.md`
+IANA registration of `mcflare.v1`, a naturally occurring Cloudflare-edge WebSocket termination, larger graphical-player stress, and Mojang `online-mode=true` validation are **optional future validation/formalization**, not release blockers for this hobby project.
 
-`docs/PROJECT_KNOWLEDGE.md` retains superseded experiments as historical engineering evidence; the files above define the current product architecture.
+## Support and security
 
-## Status
+- Bugs and reproducible interoperability problems: [GitHub Issues](https://github.com/Phloraxx/mcflare/issues)
+- Usage questions: [SUPPORT.md](SUPPORT.md)
+- Security reports: [SECURITY.md](SECURITY.md)
+- Contributions: [CONTRIBUTING.md](CONTRIBUTING.md)
 
-Experimental. One loader-neutral Minecraft adapter source is runtime-proven on Fabric and NeoForge 1.21.11/26.x; the Fabric artifacts are also runtime-proven unchanged on Quilt. Paper and Purpur use one Java-21 plugin JAR across 1.21.11, 26.1.2 and 26.2 with native PROXY support. Real-IP PROXY handoff, true Orange `/mcflare`, and named HTTP Tunnel `/mcflare` have passed real-client world joins; true Orange has also passed a 31m27s single-session/fresh-chunk burst stability run, and three simultaneous graphical clients have been proven across Orange + named Tunnel with live churn. A real external IPv6 client has proven true-Orange visitor-IP restoration through `PROXY TCP6`; public WSS Status concurrency is characterized to 128 simultaneous connections per delivery path; and higher-scale full-protocol GAME-state concurrency is proven at 16 simultaneous clients for 45 seconds plus four 16-client churn cohorts on each delivery mode. The 30.02-minute active-gameplay latency/jitter characterization is complete. Remaining external/release boundaries are authenticated Mojang online-mode proof if required, genuine Cloudflare-edge interruption observation, and public protocol publication/IANA registration of exact `mcflare.v1`. Larger graphical/world-generation stress remains optional performance characterization rather than an open MCflare transport gate.
+Never post Cloudflare credentials, Minecraft/Microsoft authentication tokens, or raw player IP addresses in an issue.
 
-## Attribution
+## License and attribution
 
-MCflare retains the MIT license and required attribution for code derived from the original Modflared project. See `NOTICE.md`.
+MCflare is MIT-licensed. It began from selected MIT-licensed ideas and Minecraft integration code from **Modflared** by Rafael / HttpRafa; attribution is preserved in [NOTICE.md](NOTICE.md) and [LICENSE](LICENSE).
+
+MCflare is an independent hobby project and is not affiliated with or endorsed by Mojang Studios, Microsoft, or Cloudflare.

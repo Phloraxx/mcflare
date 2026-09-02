@@ -5,7 +5,7 @@ plugins {
     id 'idea'
 }
 
-version = "${mod_version}-dev"
+version = providers.gradleProperty('release_version').getOrElse("${mod_version}-dev")
 group = project.maven_group
 
 def adapterJavaVersion = Integer.parseInt(project.adapter_java_version.toString())
@@ -71,6 +71,9 @@ jar {
     inputs.property 'archivesName', project.base.archivesName
     from('LICENSE') {
         rename { "${it}_${inputs.properties.archivesName}" }
+    }
+    from('NOTICE.md') {
+        rename { "NOTICE_${inputs.properties.archivesName}.md" }
     }
 }
 

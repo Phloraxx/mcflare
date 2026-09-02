@@ -1,6 +1,6 @@
 # MCflare v1 Wire Protocol
 
-Status: frozen v1 wire-definition candidate pending public publication and IANA registration.
+Status: frozen v1 wire definition used by the implementation. IANA registration is optional future formalization, not a hobby-project release requirement.
 
 ## 1. Scope
 
@@ -115,7 +115,7 @@ There is no Orange/Tunnel mode bit, token, frame, or negotiation field in `mcfla
 
 The v1 identifier is frozen as `mcflare.v1`. RFC 6455 section 1.9 recommends domain-derived names to reduce collision risk, but that advice is explicitly non-normative. Changing the already interoperable exact-match v1 token would itself require a protocol migration.
 
-Before MCflare v1 is declared public standards-complete, the project release process requires registration of exact `mcflare.v1` in IANA's First Come First Served WebSocket Subprotocol Name Registry. RFC 7936 clarifies that matching is case-sensitive and that IANA refuses new registrations differing from an existing identifier only by case.
+If MCflare later grows into a broadly implemented public interoperability protocol, the project may register exact `mcflare.v1` in IANA's First Come First Served WebSocket Subprotocol Name Registry. RFC 7936 clarifies that matching is case-sensitive and that IANA refuses new registrations differing from an existing identifier only by case. Registration is not required for this hobby-project release line.
 
 Any future backward-incompatible wire protocol MUST use a separately defined subprotocol identifier rather than silently changing the semantics of `mcflare.v1`.
 

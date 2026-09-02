@@ -23,7 +23,7 @@ Host(play.example.com) && Path(/mcflare)
   -> http://127.0.0.1:25577
 ```
 
-The reverse proxy owns public TLS. MCflare does not need a certificate. Keep HTTP/1.1 WebSocket upgrade behavior to the local gateway; there is no need for MCflare to implement HTTP/2 origin serving.
+The reverse proxy owns public TLS. MCflare does not need a certificate. Keep HTTP/1.1 WebSocket upgrade behavior to the local gateway; there is no need for MCflare to implement HTTP/2 origin serving. Cloudflare supports proxied WebSockets; ensure the zone WebSockets setting is enabled.
 
 ### Traefik
 
@@ -94,6 +94,7 @@ Example local ingress:
 ```yaml
 ingress:
   - hostname: play.example.com
+    path: ^/mcflare$
     service: http://127.0.0.1:25577
   - service: http_status:404
 ```

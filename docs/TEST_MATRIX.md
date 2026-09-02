@@ -45,7 +45,7 @@
 | Actual Java `Rfc6455Client` Status over `/mcflare`, Orange + Tunnel | PASS |
 | Real Fabric 26.1 client Quick Play -> true Orange `/mcflare` -> world join | PASS |
 | Real Fabric 26.1 client Quick Play -> named Tunnel `/mcflare` -> world join | PASS |
-| Minecraft login log exposes restored `CF-Connecting-IP` (`144.24.114.90`) on Orange + Tunnel | PASS |
+| Minecraft login log exposes restored `CF-Connecting-IP` (`<redacted-public-ip>`) on Orange + Tunnel | PASS |
 | Native Minecraft `ban-ip` immediately kicks restored-IP player and rejects fresh Orange reconnect | PASS |
 | Real MCflare-equipped Fabric 26.1 client -> clean ordinary server with zero MCflare mods | PASS |
 | Actual graphical Multiplayer `ServerStatusPinger` -> same ordinary server, visible MOTD/count/latency | PASS |
@@ -74,13 +74,13 @@
 
 ## Full-client evidence
 
-The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. On 2026-09-01 the rebuilt v1 Fabric 26.1 client was then launched as the real Minecraft client under ARM64 Oracle/Xvfb/Mesa llvmpipe and Quick Play joined an isolated Fabric server through `/mcflare` on both true Orange and the named Tunnel. In both cases the server reached `joined the game` and logged the restored visitor IPv4 `144.24.114.90`, matching the Oracle client host's public IPv4. This closes the rebuilt-v1 Fabric full-login and server-log IP proof for both ingress modes. The acceptance server was deliberately `online-mode=false`, so Mojang online-mode authentication remains a separate gate.
+The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. On 2026-09-01 the rebuilt v1 Fabric 26.1 client was then launched as the real Minecraft client under ARM64 Oracle/Xvfb/Mesa llvmpipe and Quick Play joined an isolated Fabric server through `/mcflare` on both true Orange and the named Tunnel. In both cases the server reached `joined the game` and logged the restored visitor IPv4 `<redacted-public-ip>`, matching the Oracle client host's public IPv4. This closes the rebuilt-v1 Fabric full-login and server-log IP proof for both ingress modes. The acceptance server was deliberately `online-mode=false`, so Mojang online-mode authentication remains a separate gate.
 
-## Remaining external/release boundaries
+## Optional future validation/formalization
 
-1. External public-protocol publication and IANA registration of exact `mcflare.v1` remain before calling the wire protocol standards-complete.
-2. Online-mode/authenticated login through `/mcflare` with a real player account remains available as an acceptance proof if stable-v1 release policy requires Mojang session-authentication validation.
-3. Actual Cloudflare-edge interruption observation remains distinct from the proven local connector restart and client-network black-hole tests; Cloudflare does not expose a customer control to force an edge-server restart, so this must not be replaced with a misleading simulation.
+1. IANA registration/public protocol publication may be revisited if independent third-party implementations need formal interoperability.
+2. Online-mode/authenticated login remains an optional Mojang session-authentication proof.
+3. A naturally occurring Cloudflare-edge interruption may add operational evidence, but it is not a release gate and must not be replaced with a misleading local simulation.
 
 ## Optional expansion
 

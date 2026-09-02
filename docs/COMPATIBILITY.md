@@ -68,19 +68,24 @@ If MCflare fronts a Minecraft proxy, that proxy becomes the configured Minecraft
 
 `core/` and `gateway/` target Java 8 for broad deployability. Fabric and NeoForge 1.21.11 artifacts target Java 21; both combined 26.1-26.2 loader artifacts target Java 25.
 
-## Test matrix per adapter
+## Test coverage guidance
 
-Mandatory:
+Core release coverage:
 
 - clean build;
 - server list Status through MCflare;
-- full online-mode login;
+- full login/configuration/game-state transport (offline-mode is sufficient for the MCflare transport gate);
 - ordinary server with MCflare installed;
 - server shutdown/restart lifecycle;
 - failed local gateway bind does not crash Minecraft;
 - IPv4 and IPv6 WSS where available;
-- real-IP restoration when server adapter supports it;
-- common connection-altering mods/proxies relevant to that ecosystem.
+- real-IP restoration when server adapter supports it.
+
+Recommended optional expansion:
+
+- authenticated `online-mode=true` login;
+- common connection-altering mods/proxies relevant to that ecosystem;
+- additional graphical-client and world-generation stress.
 
 ## Reference
 
