@@ -49,10 +49,12 @@ Registration is an administrative external action and is intentionally not perfo
 
 ## Remaining external acceptance boundaries
 
-These are not claims made by the unit/integration suite:
+These are outside the unit/integration suite and must not be replaced by misleading simulations:
 
-- legitimate authenticated-client validation with `online-mode=true`;
-- larger real-player concurrency/churn on production-shaped hardware;
-- observation of reconnect behavior if Cloudflare itself terminates an established edge WebSocket during an edge deployment/restart.
+- public publication of the frozen protocol definition plus IANA registration of exact `mcflare.v1` is required before calling the wire protocol standards-complete;
+- legitimate authenticated-client validation with `online-mode=true` remains an optional release-policy proof of Mojang session authentication, not a separate MCflare wire mechanism;
+- observation of behavior if Cloudflare itself terminates an established edge WebSocket during an edge deployment/restart remains distinct from the already-proven local connector restart and client-network-loss tests.
+
+Larger graphical/world-generation concurrency on production-shaped hardware is optional performance characterization. MCflare transport/session concurrency is already proven at 16 simultaneous GAME-state clients plus four 16-client churn cohorts on each public delivery mode.
 
 Cloudflare documents that edge deployments can terminate active WebSockets, so MCflare must treat disconnect/reconnect as a normal transport lifecycle event rather than assume indefinite socket persistence.

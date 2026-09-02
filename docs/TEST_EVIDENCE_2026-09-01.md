@@ -535,6 +535,33 @@ The previously open sustained active-gameplay latency/jitter gate was completed 
 
 All ten analysis windows were complete (`incomplete=0`). Excluding the warm-up window, Orange window p50 stayed between `143.85` and `150.64 ms`, with the highest observed window p95 at `213.79 ms`. Named Tunnel window p50 stayed between `151.16` and `156.46 ms`, with the highest observed window p95 at `224.65 ms`. These figures describe the tested Oracle/client/network conditions; they are not universal latency guarantees.
 
-Host telemetry over the gameplay sampling interval showed about `14.03%` interruptible CPU and `85.97%` idle CPU; the recorded host CPU peak occurred before the accepted run. This is useful host-load context, not a dedicated-server capacity claim. Higher-scale real-gameplay concurrency/churn remains a separate gate.
+Host telemetry over the gameplay sampling interval showed about `14.03%` interruptible CPU and `85.97%` idle CPU; the recorded host CPU peak occurred before the accepted run. This is useful host-load context, not a dedicated-server capacity claim. At this checkpoint higher-scale transport/session concurrency still remained separate; that gate is completed in the later GAME-state concurrency section below.
 
 Post-run housekeeping/regressions passed for v1 true Orange `/mcflare`, v1 named Tunnel `/mcflare`, direct production Minecraft Status on `127.0.0.1:25565`, and PufferPanel HTTPS. The already-retired legacy endpoints continued their expected responses: the old `25577` production path returned HTTP 400 and the test `/.well-known/mcflare` paths returned HTTP 404. No rollback or production listener replacement was required.
+
+## Higher-scale full-protocol GAME-state concurrency and churn (2026-09-02 IST)
+
+The earlier three-client test used actual software-rendered Fabric clients and active separate-region chunk loading, but the Oracle host could not scale that graphical harness because each client consumed multiple GiB. To characterize MCflare transport/session concurrency independently of rendering cost, a disposable `/tmp` harness used MCProtocolLib `26.1-1` as a version-current Minecraft protocol client while retaining MCflare's production `Rfc6455Client` and `LoopbackCarrier` from code checkpoint `11fe727`.
+
+Each test client therefore performed the real Minecraft 26.1 offline-mode LOGIN, CONFIGURATION and GAME protocol through `wss://<test-host>/mcflare` + exact `mcflare.v1`, Cloudflare, the integrated proxy-enabled MCflare gateway on `10.0.0.18:25587`, and an isolated Fabric 26.1 server on `127.0.0.1:25585`. Acceptance required both MCProtocolLib inbound and outbound protocol state to be `GAME`, the session to remain connected, and the Fabric server to log the player as joined. The library's automatic Minecraft keepalive handling remained enabled.
+
+True Orange results:
+
+- direct harness sanity check: `1/1` reached GAME and held 10 seconds;
+- public WSS preflight: `1/1` reached GAME and held 10 seconds;
+- concurrent public WSS cohort: `8/8` reached GAME and held 20 seconds;
+- higher-scale cohort: `16/16` reached GAME and remained `16/16` for 45 seconds;
+- four subsequent churn cohorts of 16 clients each all completed `16/16` GAME and a five-second hold: `64/64` churn joins total;
+- after each completed cohort, established disposable backend/gateway socket counts returned to zero.
+
+Named Tunnel results used the same isolated gateway/server and the same harness:
+
+- higher-scale cohort: `16/16` reached GAME and remained `16/16` for 45 seconds;
+- four subsequent churn cohorts of 16 clients each all completed `16/16` GAME and a five-second hold: `64/64` churn joins total;
+- after completion, established disposable backend/gateway socket counts returned to zero.
+
+Both 45-second cohorts crossed MCflare's 30-second WebSocket Ping heartbeat interval while all 16 Minecraft GAME sessions remained alive. Counting only the higher-scale sustained cohort plus churn, each delivery mode therefore carried 80 successful full-protocol GAME-state joins (`16 + 4x16`) with no observed session loss during the accepted holds.
+
+This closes the higher-scale MCflare transport/session concurrency and churn gate beyond the earlier three-real-client scenario. It does **not** claim 16 simultaneously moving graphical players, high-rate chunk generation, rendering load or a dedicated Minecraft-server capacity benchmark. Those are backend/gameplay workload questions; MCflare already has separate active-chunk evidence with three graphical clients and a separate 30.02-minute active-gameplay latency/jitter acceptance.
+
+Restoration was performed before recording the result. True Orange was restored byte-for-byte to its saved `25588` Traefik configuration. The named-Tunnel connector file was restored byte-for-byte to its saved `25588` service mapping and only that connector was restarted. The isolated Fabric server then stopped cleanly. Final checks showed no `25585/25587` listeners, the long-lived `25577` and `25588` gateway PIDs unchanged, both public `/mcflare` endpoints returning the normal 105-byte production Status response, direct production Minecraft Status passing, and PufferPanel HTTPS returning HTTP 200.

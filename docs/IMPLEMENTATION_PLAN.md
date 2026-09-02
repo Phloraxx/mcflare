@@ -89,16 +89,17 @@ Current state:
 - true-Orange long-lived transport session: PASS — one real Fabric 26.1 client stayed on one WSS/login session for 31m27s until deliberate shutdown;
 - fresh-chunk/teleport burst stability: PASS — seven high-altitude distant teleports over 5m07s, with repeated multi-second world-generation stalls and no MCflare reconnect/disconnect;
 - realistic real-client concurrency: PASS — three simultaneous Fabric 26.1 clients (two Orange, one named Tunnel), three WSS/backend streams, separate-region chunk loads, and a named-Tunnel client replacement while the two Orange sessions stayed connected;
+- higher-scale full-protocol transport/session concurrency: PASS — MCProtocolLib 26.1-1 clients using production `Rfc6455Client` + `LoopbackCarrier` reached real Minecraft GAME state at 16/16 simultaneous sessions for 45 seconds on true Orange and 16/16 on named Tunnel; each path then passed four 16-client churn cohorts (64/64 additional GAME joins), with zero residual disposable sockets;
 - named-Tunnel local connector restart recovery: PASS — an in-world real client disconnected cleanly when the test `cloudflared` connector restarted, all gateway/backend sockets closed, and a fresh real client rejoined after connector recovery;
 - true-Orange client-network black-hole teardown/recovery: PASS — removing only the live client container network disconnected the player, the hardened gateway closed both backend and WSS sides, no `25585/25587` socket remained, and fresh-client recovery is proven;
 - 30-minute active-gameplay latency/jitter characterization: PASS — 1801.449 seconds, 120 cycles/240 probes, 240/240 successful, zero route mismatches, player online throughout, and exactly one gameplay WSS connection per cycle. True Orange measured mean/p50/p95/max 155.58/145.57/187.57/451.25 ms; named Tunnel measured 164.34/154.36/197.85/447.76 ms;
 - the acceptance server was offline-mode, so authenticated Mojang online-mode login remains unproven.
 
-Remaining before stable release:
+Remaining external/release boundaries:
 
-- online-mode/authenticated client proof if required for release acceptance;
-- higher-scale connection-churn/ceiling characterization beyond the proven three-real-client scenario;
-- actual Cloudflare-edge interruption behavior remains distinct from both the proven local `cloudflared` connector restart and the proven client-network black-hole test;
+- public publication of the frozen v1 protocol definition and IANA registration of exact `mcflare.v1` before calling the wire protocol standards-complete;
+- online-mode/authenticated client proof if stable-v1 release policy requires explicit Mojang session-authentication validation;
+- actual Cloudflare-edge interruption observation remains distinct from both the proven local `cloudflared` connector restart and the proven client-network black-hole test; Cloudflare exposes no customer edge-restart control, so do not substitute a local simulation and label it an edge outage;
 
 ## Gate 7 - compatibility expansion
 
@@ -114,10 +115,11 @@ Fabric and NeoForge version-branch reduction is now proven:
 
 Next order:
 
-1. If required for stable-v1 acceptance, authenticated Mojang online-mode proof with the rebuilt client.
-2. Higher-scale real-gameplay load/churn characterization beyond the proven three-client and public-WSS stress gates.
-3. Actual Cloudflare-edge interruption behavior; local connector restart and client-network black-hole behavior are already proven separately.
-4. Optional real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets.
+1. Publish the frozen v1 protocol definition and complete IANA registration of exact `mcflare.v1`.
+2. If release policy requires it, perform authenticated Mojang online-mode proof with a legitimate rebuilt client without harvesting/storing account tokens.
+3. Observe a genuine Cloudflare-edge-initiated WebSocket termination if one occurs during an edge deployment/restart; local connector restart and client-network black-hole behavior are already proven and must remain labeled separately.
+
+Optional expansion after those boundaries: larger graphical/world-generation stress, real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets. The higher-scale MCflare transport/session concurrency gate is already complete.
 
 Never fork RFC6455/discovery/gateway logic per loader.
 

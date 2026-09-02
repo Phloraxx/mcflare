@@ -52,6 +52,9 @@
 | Real Fabric 26.1 true-Orange session: 31m27s connected; seven distant fresh-chunk teleports in 5m07s; one WSS upgrade/login and no spontaneous reconnect | PASS |
 | 30.02-minute active-gameplay latency/jitter acceptance: 120 cycles, 240/240 probes, zero route mismatches, player continuously online, exactly one gameplay WSS; Orange mean/p50/p95 155.58/145.57/187.57 ms, Tunnel 164.34/154.36/197.85 ms | PASS |
 | Three simultaneous real Fabric 26.1 clients (2 Orange + 1 Tunnel), separate-region chunk loads, then Tunnel client replacement while 2 Orange sessions survive | PASS |
+| Higher-scale full-protocol 26.1 GAME-state concurrency: 16/16 simultaneous true-Orange sessions held 45 s across MCflare heartbeat interval | PASS |
+| Higher-scale full-protocol 26.1 GAME-state concurrency: 16/16 simultaneous named-Tunnel sessions held 45 s across MCflare heartbeat interval | PASS |
+| Higher-scale GAME-state churn: four 16-client cohorts per delivery mode, 64/64 joins on Orange and 64/64 on Tunnel, zero residual disposable sockets | PASS |
 | Real named-Tunnel client during local `cloudflared` restart: clean disconnect, zero residual WSS/backend sockets, connector recovery, fresh real-client rejoin | PASS |
 | Real true-Orange client network black-hole: player disconnect, backend + WSS teardown, gateway slot release, fresh-client recovery | PASS |
 | Historical migration checkpoint: refreshed `25588` gateway with `/mcflare` Orange + Tunnel, legacy paths, and direct production Status | PASS before legacy retirement |
@@ -73,11 +76,15 @@
 
 The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. On 2026-09-01 the rebuilt v1 Fabric 26.1 client was then launched as the real Minecraft client under ARM64 Oracle/Xvfb/Mesa llvmpipe and Quick Play joined an isolated Fabric server through `/mcflare` on both true Orange and the named Tunnel. In both cases the server reached `joined the game` and logged the restored visitor IPv4 `144.24.114.90`, matching the Oracle client host's public IPv4. This closes the rebuilt-v1 Fabric full-login and server-log IP proof for both ingress modes. The acceptance server was deliberately `online-mode=false`, so Mojang online-mode authentication remains a separate gate.
 
-## Required before stable v1
+## Remaining external/release boundaries
 
-1. Online-mode/authenticated login through `/mcflare` with a real player account, if stable-v1 acceptance requires Mojang session authentication proof.
-2. Higher-scale real-gameplay load/churn characterization beyond the proven three-real-client scenario. The 30.02-minute active-gameplay latency/jitter gate is complete, and public WSS Status concurrency is already characterized to 128 simultaneous connections per delivery path; the fresh-chunk, local Tunnel-connector restart, and true-Orange client-network black-hole gates are also complete. Actual Cloudflare-edge interruption remains separate.
-3. Optional real-client runtime expansion to Quilt/NeoForge and other supported version families; their server and binary compatibility gates are already proven.
+1. External public-protocol publication and IANA registration of exact `mcflare.v1` remain before calling the wire protocol standards-complete.
+2. Online-mode/authenticated login through `/mcflare` with a real player account remains available as an acceptance proof if stable-v1 release policy requires Mojang session-authentication validation.
+3. Actual Cloudflare-edge interruption observation remains distinct from the proven local connector restart and client-network black-hole tests; Cloudflare does not expose a customer control to force an edge-server restart, so this must not be replaced with a misleading simulation.
+
+## Optional expansion
+
+- Real-client runtime expansion to Quilt/NeoForge and larger graphical/world-generation stress remain performance/compatibility work. The higher-scale MCflare transport/session gate itself is complete at 16 simultaneous GAME-state clients plus four 16-client churn cohorts per delivery mode.
 
 Completed release gate: a real external IPv6 client has proven true-Orange visitor-IP restoration as `PROXY TCP6`, followed by a real Fabric 26.1 Status response through the integrated parser.
 
