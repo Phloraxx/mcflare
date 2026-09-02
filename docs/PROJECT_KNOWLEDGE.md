@@ -367,8 +367,8 @@ Proven results include:
 | Datagram service idle for 5.5 s then send/receive | PASS after setup/read-timeout split |
 | Baseline vs voice branch under blocked QUIC Quick Tunnel | both failed full stream; external connector issue isolated |
 | Quick Tunnel forced to HTTP/2 on same network | baseline and current branch full login PASS |
-| Named Cloudflare Tunnel Basic control (`mcflare-test.mulearnscet.in`) | Status + full 26.2 login PASS |
-| Named Cloudflare Tunnel Enhanced HTTP/WSS (`mcflare2-test.mulearnscet.in`) | Status + full 26.2 login PASS; gateway received Cloudflare source metadata |
+| Named Cloudflare Tunnel Basic control (`legacy-tunnel-test.example.com`) | Status + full 26.2 login PASS |
+| Named Cloudflare Tunnel Enhanced HTTP/WSS (`tunnel-test.example.com`) | Status + full 26.2 login PASS; gateway received Cloudflare source metadata |
 
 Observed protected discovery on healthy temporary Quick Tunnels has generally been around 0.9-1.5 seconds after startup/network variability. These are development measurements, not latency SLAs. Quick Tunnel connector health must be checked separately because Status success alone did not guarantee a healthy long-lived route during the QUIC/7844 incident.
 
@@ -580,12 +580,12 @@ The product scope is now Minecraft-only. Historical SVC/MCF1/datagram sections a
 
 Two initially attempted "Orange" benchmark hostnames were later found to be invalid controls:
 
-- `payment.mulearnscet.in` is an ingress on Tunnel `c2b74634-394b-4427-b588-d004af9e853b`.
-- `aegissafety.co.in` is an ingress on Tunnel `5b4c3fe5-64de-4f0b-be67-943b88bc7d7c`.
+- `<redacted-unrelated-host>` is an ingress on Tunnel `<redacted-tunnel-id>`.
+- `<redacted-unrelated-host>` is an ingress on Tunnel `<redacted-tunnel-id>`.
 
 Their earlier latency measurements must not be cited as Orange-cloud results.
 
-A preliminary true-Orange path was first validated on `hooks.ieeesahrdaya.com`. A dedicated permanent test hostname, `mcflare-orange-test.mulearnscet.in`, was then created as a normal proxied A/AAAA record. All running `cloudflared` container configurations were audited and the dedicated hostname is absent from every Tunnel ingress. Cloudflare reaches Oracle Traefik directly, which forwards only `/.well-known/mcflare` to the gateway. The public `mcflare.v1` WSS upgrade and a full Minecraft 26.2 login both passed.
+A preliminary true-Orange path was first validated on `<redacted-preliminary-host>`. A dedicated permanent test hostname, `orange-test.example.com`, was then created as a normal proxied A/AAAA record. All running `cloudflared` container configurations were audited and the dedicated hostname is absent from every Tunnel ingress. Cloudflare reaches Oracle Traefik directly, which forwards only `/.well-known/mcflare` to the gateway. The public `mcflare.v1` WSS upgrade and a full Minecraft 26.2 login both passed.
 
 Same Mac, same Oracle backend/gateway, 15 samples per path:
 
@@ -616,7 +616,7 @@ See `TEST_EVIDENCE_2026-09-01.md` for exact proof and `IMPLEMENTATION_PLAN.md` f
 
 A real Minecraft client no longer requires the Mac test host. An isolated ARM64 Ubuntu Docker image on Oracle runs OpenJDK 25 + Xvfb + Mesa llvmpipe/OpenGL 4.5 and successfully launches the actual Fabric 26.1 Minecraft client. This environment is acceptance-test infrastructure only.
 
-Using source commit `7e542e9354948b41f7d9188627d4f4661484c51e`, Minecraft Quick Play joined an isolated Fabric 26.1 server through `mcflare-orange-test.mulearnscet.in` and then `mcflare2-test.mulearnscet.in`. Both paths used `/mcflare` + `mcflare.v1`, the real client Mixins/RouteResolver/LoopbackCarrier, Cloudflare, the integrated gateway, PROXY v1 and the normal Minecraft login/configuration/game phases. Both reached `joined the game`.
+Using source commit `7e542e9354948b41f7d9188627d4f4661484c51e`, Minecraft Quick Play joined an isolated Fabric 26.1 server through `orange-test.example.com` and then `tunnel-test.example.com`. Both paths used `/mcflare` + `mcflare.v1`, the real client Mixins/RouteResolver/LoopbackCarrier, Cloudflare, the integrated gateway, PROXY v1 and the normal Minecraft login/configuration/game phases. Both reached `joined the game`.
 
 The gateway reported `realIpPresent=true cfRayPresent=true` on both upgrades. Minecraft logged the client as `<redacted-public-ip>` on both joins, independently matching Oracle's public IPv4. This closes the real-client full-transport and login-log IP proof for true Orange and named Tunnel. The isolated server was intentionally offline-mode; authenticated Mojang online-mode remains a distinct optional validation proof.
 
@@ -638,7 +638,7 @@ Minecraft's real `ServerStatusPinger` then opened a loopback TCP connection to `
 
 ## 25. Sustained true-Orange gameplay/chunk-burst acceptance — 2026-09-01
 
-The isolated Fabric 26.1 acceptance server again used `127.0.0.1:25585` with its integrated gateway on `10.0.0.18:25587`. Only the test `/mcflare` routes were temporarily moved from the parallel `25588` gateway to `25587`; production Minecraft `25565` and legacy gateway `25577` were not replaced. Both public hostnames returned the isolated server's distinct 125-byte Status response before the real-client run.
+The isolated Fabric 26.1 acceptance server again used `127.0.0.1:25585` with its integrated gateway on `<private-origin-ip>:25587`. Only the test `/mcflare` routes were temporarily moved from the parallel `25588` gateway to `25587`; production Minecraft `25565` and legacy gateway `25577` were not replaced. Both public hostnames returned the isolated server's distinct 125-byte Status response before the real-client run.
 
 The real Fabric client joined true Orange at 14:10:04 as `Player6[/<redacted-public-ip>:39352]`; the gateway had accepted exactly one gameplay upgrade at 14:09:58 with both Cloudflare metadata fields present. An initial unsafe harness teleport caused the player to drown, but the transport remained connected. The player was switched to spectator, respawned, and Minecraft reported health `20.0f`.
 
@@ -658,7 +658,7 @@ Both test routes were restored to `25588`; the isolated `25585/25587` server was
 
 ## 27. Named-Tunnel local connector restart/recovery — 2026-09-01
 
-The isolated Fabric 26.1 acceptance server used `127.0.0.1:25585` and integrated MCflare `10.0.0.18:25587`. Only `mcflare2-test.mulearnscet.in` `/mcflare` was temporarily routed to `25587`; true Orange stayed on `25588` as a live control. A real named-Tunnel client joined as `Player66[/<redacted-public-ip>:52604]`.
+The isolated Fabric 26.1 acceptance server used `127.0.0.1:25585` and integrated MCflare `<private-origin-ip>:25587`. Only `tunnel-test.example.com` `/mcflare` was temporarily routed to `25587`; true Orange stayed on `25588` as a live control. A real named-Tunnel client joined as `Player66[/<redacted-public-ip>:52604]`.
 
 Restarting the local named test `cloudflared` container caused the gateway-side WSS stream to reset, the Minecraft server to remove the player cleanly, and the real client to show `Disconnected`; afterward no established gateway/backend socket remained. Once `cloudflared` returned, WSS Status and PufferPanel were healthy, and a fresh real client joined as `Player971[/<redacted-public-ip>:41994]`. This is evidence for local connector restart/recovery only, not a Cloudflare-edge failure test.
 

@@ -77,7 +77,7 @@ Fabric 26.2 server at `127.0.0.1:25585`, MCflare gateway at `127.0.0.1:25587`. A
 
 ### Live Cloudflare proof
 
-On 2026-09-01 both `mcflare-orange-test.mulearnscet.in/mcflare` and `mcflare2-test.mulearnscet.in/mcflare` were routed to the integrated Fabric gateway. Initial Status probes returned the distinct dev-server response and logged `realIpPresent=true` plus `cfRayPresent=true`.
+On 2026-09-01 both `orange-test.example.com/mcflare` and `tunnel-test.example.com/mcflare` were routed to the integrated Fabric gateway. Initial Status probes returned the distinct dev-server response and logged `realIpPresent=true` plus `cfRayPresent=true`.
 
 The stronger acceptance then used the actual Fabric 26.1 Minecraft client under an isolated ARM64 Oracle Docker/Xvfb/Mesa-llvmpipe environment. Quick Play joined the isolated world through true Orange and then through the named Tunnel. The server logged `Player357[/<redacted-public-ip>:60826] logged in` for Orange and `Player977[/<redacted-public-ip>:49428] logged in` for Tunnel; `<redacted-public-ip>` independently matched the Oracle client host public IPv4. A later true-Orange run joined as `Player393[/<redacted-public-ip>:53422]`; issuing Minecraft's native `ban-ip <redacted-public-ip>` immediately disconnected that player, and a fresh real-client attempt was rejected as `Player44 (/<redacted-public-ip>:42538)` with `Your IP address is banned from this server.` The test IP was then pardoned. This proves the restored address reaches Minecraft's native enforcement path, not only Status/logging. The server was intentionally `online-mode=false`, so this does not claim Mojang session-authentication coverage.
 
