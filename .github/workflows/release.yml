@@ -162,7 +162,7 @@ jobs:
           cp "neoforge/build/libs/mcflare-neoforge-${{ matrix.artifact }}-${VERSION}.jar" dist/
       - name: Verify NeoForge metadata
         run: |
-          unzip -p dist/*.jar META-INF/neoforge.mods.toml | grep -Fq "version="$VERSION""
+          unzip -p dist/*.jar META-INF/neoforge.mods.toml | grep -Fq "version=\"$VERSION\""
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mcflare-neoforge-${{ matrix.artifact }}
@@ -212,13 +212,34 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      contents: write
+      contents: read
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: mcflare-*
           path: dist
           merge-multiple: true
+      - name: Resolve release version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Verify release bundle
+        shell: bash
+        run: |
+          expected=(
+            "mcflare-fabric-1.21.11-${VERSION}.jar"
+            "mcflare-fabric-26.1-26.2-${VERSION}.jar"
+            "mcflare-neoforge-1.21.11-${VERSION}.jar"
+            "mcflare-neoforge-26.1-26.2-${VERSION}.jar"
+            "mcflare-paper-${VERSION}.jar"
+          )
+          test "$(find dist -maxdepth 1 -type f -name '*.jar' | wc -l)" -eq "${#expected[@]}"
+          for artifact in "${expected[@]}"; do test -f "dist/$artifact"; done
       - name: Generate checksums
         working-directory: dist
         run: sha256sum *.jar | sort -k2 > SHA256SUMS.txt
@@ -229,8 +250,21 @@ jobs:
           name: mcflare-release-bundle
           path: dist/*
           if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    if: github.event_name == 'push'
+    needs: bundle
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mcflare-release-bundle
+          path: dist
       - name: Publish GitHub Release
-        if: github.event_name == 'push'
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
