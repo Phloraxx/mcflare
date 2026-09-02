@@ -6,7 +6,7 @@ MCflare is designed so the player experience remains normal Minecraft. Players i
 
 | Environment | Artifact |
 |---|---|
-| Fabric 1.21.11 | `mcflare-fabric-1.21.11-<version>.jar` |
+| Fabric / Quilt 1.21.11 | `mcflare-fabric-1.21.11-<version>.jar` |
 | Fabric / Quilt 26.1–26.2 | `mcflare-fabric-26.1-26.2-<version>.jar` |
 | NeoForge 1.21.11 | `mcflare-neoforge-1.21.11-<version>.jar` |
 | NeoForge 26.1–26.2 | `mcflare-neoforge-26.1-26.2-<version>.jar` |

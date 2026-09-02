@@ -150,6 +150,7 @@ IANA registration of `mcflare.v1`, a naturally occurring Cloudflare-edge WebSock
 - Usage questions: [SUPPORT.md](SUPPORT.md)
 - Security reports: [SECURITY.md](SECURITY.md)
 - Contributions: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Community conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 Never post Cloudflare credentials, Minecraft/Microsoft authentication tokens, or raw player IP addresses in an issue.
 
