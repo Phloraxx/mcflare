@@ -22,6 +22,8 @@ jobs:
           persist-credentials: false
       - name: Validate Markdown links and documentation assets
         run: python3 scripts/check_docs.py
+      - name: Verify release archive normalizer
+        run: python3 scripts/normalize_zip.py --self-test
 
   fabric:
     name: ${{ matrix.name }}

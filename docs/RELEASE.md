@@ -1,12 +1,12 @@
 # Release process
 
-MCflare releases are built from GitHub Actions so the published JARs are reproducible from a known commit and accompanied by checksums.
+MCflare releases are built from GitHub Actions from a known commit, with normalized archive timestamps/order so clean builds are byte-reproducible and accompanied by checksums.
 
 ## Release blockers
 
 For this hobby project, a release candidate requires:
 
-1. the normal seven-row CI matrix is green;
+1. the normal CI suite is green (documentation checks plus the seven platform rows);
 2. the tag/manual release workflow successfully builds all five supported binary families;
 3. the exact packaged JARs receive a small smoke test on their intended platform families;
 4. documentation/support matrix and changelog match the artifacts;

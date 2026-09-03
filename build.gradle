@@ -8,6 +8,13 @@ plugins {
 version = providers.gradleProperty('release_version').getOrElse("${mod_version}-dev")
 group = project.maven_group
 
+// Keep Gradle-produced archive contents deterministic. Loom may inject nested JAR
+// filesystem timestamps afterward; the release workflow normalizes the final JAR.
+tasks.withType(org.gradle.api.tasks.bundling.AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
 def adapterJavaVersion = Integer.parseInt(project.adapter_java_version.toString())
 def useMojangMappings = project.use_mojang_mappings.toString().toBoolean()
 
