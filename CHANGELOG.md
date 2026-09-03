@@ -16,6 +16,7 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 - Remove the unused client carrier getter from the internal Mixin bridge.
 - Run the full CI matrix once per pull request instead of duplicating it for both the branch push and pull-request event; merged `main` still receives its own full CI run.
 - Remove unused Maven-publication, IDE-plugin, and source-JAR build plumbing from the Fabric root build.
+- Pin Fabric Loom to fixed published versions in development, CI, and release builds so release inputs do not depend on mutable `-SNAPSHOT` coordinates.
 
 ## 1.0.0 - 2026-09-03
 
