@@ -61,6 +61,38 @@ class Rfc6455UpgradeValidationTest {
         }
     }
 
+    @Test void duplicateSingletonUpgradeHeadersAreRejected() {
+        String duplicateAccept = response("Sec-WebSocket-Accept: duplicate\r\n");
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(duplicateAccept, KEY, null));
+
+        String duplicateProtocol = response("Sec-WebSocket-Protocol: mcflare.v1\r\nSec-WebSocket-Protocol: mcflare.v1\r\n");
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(duplicateProtocol, KEY, "mcflare.v1"));
+    }
+
+    @Test void malformedOrFoldedUpgradeResponseHeaderIsRejected() {
+        String malformed = response("").replace("Upgrade: websocket\r\n", " Upgrade: websocket\r\n");
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(malformed, KEY, null));
+    }
+
+    @Test void repeatedConnectionHeaderTokensRemainValid() throws Exception {
+        String repeated = response("").replace("Connection: Upgrade\r\n",
+                "Connection: keep-alive\r\nConnection: Upgrade\r\n");
+        Rfc6455Client.validateUpgradeResponse(repeated, KEY, null);
+    }
+
+    @Test void formatsIpv6HostAuthorityCorrectly() {
+        assertEquals("[::1]", Rfc6455Client.formatHostHeader("::1", 443));
+        assertEquals("[::1]:8443", Rfc6455Client.formatHostHeader("::1", 8443));
+        assertEquals("play.example.com", Rfc6455Client.formatHostHeader("play.example.com", 443));
+    }
+
+    @Test void invalidRequestPathAndSubprotocolFailBeforeNetworkUse() {
+        assertThrows(IllegalArgumentException.class, () -> Rfc6455Client.connect(
+                "localhost", 443, "/mcflare\r\nX-Test: injected", 100, 0, "mcflare.v1"));
+        assertThrows(IllegalArgumentException.class, () -> Rfc6455Client.connect(
+                "localhost", 443, "/mcflare", 100, 0, "mcflare.v1\r\nX-Test"));
+    }
+
     @Test void arbitraryStatusLineContaining101IsRejected() {
         String invalid = response("").replace("HTTP/1.1 101 Switching Protocols", "NOTHTTP 101 Whatever");
         assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(invalid, KEY, null));

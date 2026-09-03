@@ -10,6 +10,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.IDN;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -61,7 +62,8 @@ public final class Rfc6455Client implements Closeable {
                                          String requiredSubprotocol) throws IOException {
         host = validateHost(host);
         if (port < 1 || port > 65535) throw new IllegalArgumentException("port");
-        if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("path");
+        path = validatePath(path);
+        requiredSubprotocol = validateSubprotocol(requiredSubprotocol);
         if (connectTimeoutMs < 1) throw new IllegalArgumentException("connectTimeoutMs");
         if (readTimeoutMs < 0) throw new IllegalArgumentException("readTimeoutMs");
 
@@ -187,7 +189,7 @@ public final class Rfc6455Client implements Closeable {
         byte[] nonce = new byte[16];
         random.nextBytes(nonce);
         String key = Base64.getEncoder().encodeToString(nonce);
-        String hostHeader = port == 443 ? host : host + ":" + port;
+        String hostHeader = formatHostHeader(host, port);
         String request = "GET " + path + " HTTP/1.1\r\n"
                 + "Host: " + hostHeader + "\r\n"
                 + "Upgrade: websocket\r\n"
@@ -217,15 +219,29 @@ public final class Rfc6455Client implements Closeable {
         String subprotocol = null;
         String extensions = null;
         for (int i = 1; i < lines.length; i++) {
+            if (lines[i].isEmpty()) continue;
             int colon = lines[i].indexOf(':');
-            if (colon <= 0) continue;
-            String name = lines[i].substring(0, colon).trim().toLowerCase(Locale.ROOT);
+            if (colon <= 0) throw new IOException("Malformed WebSocket upgrade response header");
+            String rawName = lines[i].substring(0, colon);
+            if (!rawName.equals(rawName.trim()) || !isHttpToken(rawName)) {
+                throw new IOException("Malformed WebSocket upgrade response header");
+            }
+            String name = rawName.toLowerCase(Locale.ROOT);
             String value = lines[i].substring(colon + 1).trim();
-            if ("sec-websocket-accept".equals(name)) actualAccept = value;
-            else if ("upgrade".equals(name)) upgrade = value;
-            else if ("connection".equals(name)) connection = value;
-            else if ("sec-websocket-protocol".equals(name)) subprotocol = value;
-            else if ("sec-websocket-extensions".equals(name)) extensions = value;
+            if ("sec-websocket-accept".equals(name)) {
+                if (actualAccept != null) throw new IOException("Duplicate Sec-WebSocket-Accept header");
+                actualAccept = value;
+            } else if ("upgrade".equals(name)) {
+                upgrade = appendHeaderValue(upgrade, value);
+            } else if ("connection".equals(name)) {
+                connection = appendHeaderValue(connection, value);
+            } else if ("sec-websocket-protocol".equals(name)) {
+                if (subprotocol != null) throw new IOException("Duplicate Sec-WebSocket-Protocol header");
+                subprotocol = value;
+            } else if ("sec-websocket-extensions".equals(name)) {
+                if (extensions != null) throw new IOException("Duplicate Sec-WebSocket-Extensions header");
+                extensions = value;
+            }
         }
         boolean subprotocolValid = requiredSubprotocol == null
                 ? subprotocol == null
@@ -246,6 +262,15 @@ public final class Rfc6455Client implements Closeable {
             if (expected.equalsIgnoreCase(token.trim())) return true;
         }
         return false;
+    }
+
+    private static String appendHeaderValue(String existing, String value) {
+        return existing == null ? value : existing + "," + value;
+    }
+
+    static String formatHostHeader(String host, int port) {
+        String authorityHost = host.indexOf(':') >= 0 ? "[" + host + "]" : host;
+        return port == 443 ? authorityHost : authorityHost + ":" + port;
     }
 
     static String readHeaders(InputStream in, Socket socket, int timeoutMs) throws IOException {
@@ -432,6 +457,9 @@ public final class Rfc6455Client implements Closeable {
     private static String validateHost(String host) {
         if (host == null) throw new IllegalArgumentException("host");
         String value = host.trim();
+        if (value.length() > 1 && value.charAt(0) == '[' && value.charAt(value.length() - 1) == ']') {
+            value = value.substring(1, value.length() - 1);
+        }
         if (value.isEmpty()) throw new IllegalArgumentException("host");
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
@@ -439,7 +467,46 @@ public final class Rfc6455Client implements Closeable {
                 throw new IllegalArgumentException("invalid host");
             }
         }
+        if (value.indexOf(':') < 0) {
+            try {
+                value = IDN.toASCII(value);
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("invalid host", error);
+            }
+            if (value.isEmpty()) throw new IllegalArgumentException("invalid host");
+        }
         return value;
+    }
+
+    private static String validatePath(String path) {
+        if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("path");
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c < 0x21 || c > 0x7E || c == '#') throw new IllegalArgumentException("invalid path");
+        }
+        return path;
+    }
+
+    private static String validateSubprotocol(String subprotocol) {
+        if (subprotocol == null) return null;
+        if (!isHttpToken(subprotocol)) throw new IllegalArgumentException("invalid WebSocket subprotocol");
+        return subprotocol;
+    }
+
+    private static boolean isHttpToken(String value) {
+        if (value == null || value.isEmpty()) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) continue;
+            switch (c) {
+                case '!': case '#': case '$': case '%': case '&': case '\'': case '*': case '+':
+                case '-': case '.': case '^': case '_': case '`': case '|': case '~':
+                    continue;
+                default:
+                    return false;
+            }
+        }
+        return true;
     }
 
     private static void validateFrameSlice(byte[] data, int offset, int length) {

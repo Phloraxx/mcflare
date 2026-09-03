@@ -213,6 +213,68 @@ class WebSocketServerConnectionTest {
         }
     }
 
+    @Test void duplicateSingletonRequestHeadersAreRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String request = "GET /mcflare HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n"
+                + "Sec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        assertRawUpgradeRejected(request);
+    }
+
+    @Test void duplicateForwardingIdentityHeaderIsRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String request = "GET /mcflare HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n"
+                + "Sec-WebSocket-Protocol: mcflare.v1\r\n"
+                + "CF-Connecting-IP: 198.51.100.1\r\n"
+                + "CF-Connecting-IP: 198.51.100.2\r\n\r\n";
+        assertRawUpgradeRejected(request);
+    }
+
+    @Test void malformedHeaderNameAndObsFoldAreRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String common = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key
+                + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        assertRawUpgradeRejected("GET /mcflare HTTP/1.1\r\nHost : localhost\r\n" + common);
+        assertRawUpgradeRejected("GET /mcflare HTTP/1.1\r\nHost: localhost\r\n folded\r\n" + common);
+    }
+
+    @Test void repeatedConnectionHeadersMaySupplyUpgradeToken() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String request = "GET /mcflare HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: keep-alive\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n"
+                + "Sec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<WebSocketServerConnection> result = new CompletableFuture<WebSocketServerConnection>();
+            Thread t = new Thread(() -> {
+                try { result.complete(WebSocketServerConnection.accept(server.accept(), "/mcflare", "mcflare.v1")); }
+                catch (Throwable error) { result.completeExceptionally(error); }
+            });
+            t.setDaemon(true);
+            t.start();
+            try (Socket client = new Socket("127.0.0.1", server.getLocalPort())) {
+                client.getOutputStream().write(request.getBytes(StandardCharsets.ISO_8859_1));
+                client.getOutputStream().flush();
+                WebSocketServerConnection ws = result.get(2, TimeUnit.SECONDS);
+                ws.close();
+            }
+        }
+    }
+
     @Test void http10AndMissingHostAreRejected() throws Exception {
         String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
         String common = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key

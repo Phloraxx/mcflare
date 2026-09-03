@@ -342,13 +342,42 @@ final class WebSocketServerConnection implements Closeable {
 
         Map<String, String> headers = new LinkedHashMap<String, String>();
         for (int i = 1; i < lines.length; i++) {
+            if (lines[i].isEmpty()) continue;
             int colon = lines[i].indexOf(':');
-            if (colon <= 0) continue;
-            headers.put(lines[i].substring(0, colon).trim().toLowerCase(Locale.ROOT),
-                    lines[i].substring(colon + 1).trim());
+            if (colon <= 0) throw new IOException("malformed HTTP header");
+            String rawName = lines[i].substring(0, colon);
+            if (!rawName.equals(rawName.trim()) || !isHttpToken(rawName)) {
+                throw new IOException("malformed HTTP header");
+            }
+            String name = rawName.toLowerCase(Locale.ROOT);
+            String value = lines[i].substring(colon + 1).trim();
+            String previous = headers.get(name);
+            if (previous == null) {
+                headers.put(name, value);
+            } else if ("connection".equals(name) || "upgrade".equals(name)) {
+                headers.put(name, previous + "," + value);
+            } else {
+                throw new IOException("duplicate HTTP header: " + name);
+            }
         }
         return new UpgradeRequest(requestLine[1], headers);
     }
+    private static boolean isHttpToken(String value) {
+        if (value == null || value.isEmpty()) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) continue;
+            switch (c) {
+                case '!': case '#': case '$': case '%': case '&': case '\'': case '*': case '+':
+                case '-': case '.': case '^': case '_': case '`': case '|': case '~':
+                    continue;
+                default:
+                    return false;
+            }
+        }
+        return true;
+    }
+
     private static int readBeforeDeadline(Socket socket, InputStream input, long deadlineNanos)
             throws IOException {
         long remaining = deadlineNanos - System.nanoTime();
