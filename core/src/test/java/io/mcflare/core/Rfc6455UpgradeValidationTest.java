@@ -86,6 +86,15 @@ class Rfc6455UpgradeValidationTest {
         assertEquals("play.example.com", Rfc6455Client.formatHostHeader("play.example.com", 443));
     }
 
+    @Test void invalidDnsHostShapeFailsBeforeNetworkUse() {
+        assertThrows(IllegalArgumentException.class, () -> Rfc6455Client.connect(
+                "bad..example.com", 443, "/mcflare", 100, 0, "mcflare.v1"));
+        StringBuilder tooLong = new StringBuilder();
+        for (int i = 0; i < 254; i++) tooLong.append('a');
+        assertThrows(IllegalArgumentException.class, () -> Rfc6455Client.connect(
+                tooLong.toString(), 443, "/mcflare", 100, 0, "mcflare.v1"));
+    }
+
     @Test void invalidRequestPathAndSubprotocolFailBeforeNetworkUse() {
         assertThrows(IllegalArgumentException.class, () -> Rfc6455Client.connect(
                 "localhost", 443, "/mcflare\r\nX-Test: injected", 100, 0, "mcflare.v1"));

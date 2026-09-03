@@ -3,9 +3,12 @@ package io.mcflare.core;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Set;
 
@@ -31,6 +34,54 @@ class KnownRouteStoreTest {
     void invalidNewPinIsRejectedInsteadOfSilentlySkippingPersistence() {
         KnownRouteStore store = new KnownRouteStore(null);
         assertThrows(IllegalArgumentException.class, () -> store.remember("not a host:25565"));
+    }
+
+    @Test
+    void appendRepairsMissingFinalNewlineWithoutConcatenatingPins() throws Exception {
+        Path file = tempDir.resolve("known-hosts-v1.txt");
+        Files.write(file, "one.example.com:25565".getBytes(StandardCharsets.UTF_8));
+        KnownRouteStore store = new KnownRouteStore(file);
+        store.remember("two.example.com:25565");
+
+        String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+        assertTrue(text.contains("one.example.com:25565\ntwo.example.com:25565\n"));
+        KnownRouteStore reloaded = new KnownRouteStore(file);
+        assertTrue(reloaded.contains("one.example.com:25565"));
+        assertTrue(reloaded.contains("two.example.com:25565"));
+    }
+
+    @Test
+    void staleStoreInstanceMergesPinsWrittenByAnotherInstanceBeforeAppending() throws Exception {
+        Path file = tempDir.resolve("known-hosts-v1.txt");
+        KnownRouteStore first = new KnownRouteStore(file);
+        KnownRouteStore second = new KnownRouteStore(file);
+
+        first.remember("one.example.com:25565");
+        second.remember("two.example.com:25565");
+
+        assertTrue(second.contains("one.example.com:25565"));
+        KnownRouteStore reloaded = new KnownRouteStore(file);
+        assertTrue(reloaded.contains("one.example.com:25565"));
+        assertTrue(reloaded.contains("two.example.com:25565"));
+    }
+
+    @Test
+    void surroundingWhitespaceInPersistedPinFailsClosed() throws Exception {
+        Path file = tempDir.resolve("known-hosts-v1.txt");
+        Files.write(file, " play.example.com:25565 \n".getBytes(StandardCharsets.UTF_8));
+        KnownRouteStore store = new KnownRouteStore(file);
+        assertThrows(IllegalStateException.class, () -> store.contains("play.example.com:25565"));
+    }
+
+    @Test
+    void overlappingProcessLockFailsClosedInsteadOfEscapingUnchecked() throws Exception {
+        Path file = tempDir.resolve("known-hosts-v1.txt");
+        Files.write(file, "play.example.com:25565\n".getBytes(StandardCharsets.UTF_8));
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, StandardOpenOption.WRITE);
+             FileLock ignored = channel.lock()) {
+            KnownRouteStore store = new KnownRouteStore(file);
+            assertThrows(IllegalStateException.class, () -> store.contains("play.example.com:25565"));
+        }
     }
 
     @Test

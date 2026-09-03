@@ -473,7 +473,10 @@ public final class Rfc6455Client implements Closeable {
             } catch (IllegalArgumentException error) {
                 throw new IllegalArgumentException("invalid host", error);
             }
-            if (value.isEmpty()) throw new IllegalArgumentException("invalid host");
+            if (value.isEmpty() || value.length() > 253 || value.startsWith(".")
+                    || value.endsWith(".") || value.contains("..")) {
+                throw new IllegalArgumentException("invalid host");
+            }
         }
         return value;
     }
