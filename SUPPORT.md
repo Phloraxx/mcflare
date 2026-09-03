@@ -1,19 +1,17 @@
 # Support
 
-Use **GitHub Discussions** for setup help, questions, deployment advice, and ideas that are not yet a concrete bug.
+For setup help, deployment questions, and ideas, use [GitHub Discussions](https://github.com/Phloraxx/mcflare/discussions).
 
-Use **GitHub Issues** when you can describe a reproducible MCflare bug or interoperability problem.
+For a reproducible MCflare bug, use [GitHub Issues](https://github.com/Phloraxx/mcflare/issues).
 
-Before posting, check:
+Before posting, check the [FAQ](docs/FAQ.md), [Compatibility](docs/COMPATIBILITY.md), and [Troubleshooting](docs/TROUBLESHOOTING.md) pages.
 
-1. [FAQ](docs/FAQ.md)
-2. [Installation](docs/INSTALLATION.md)
-3. [Choose your setup](docs/SETUP_CHOICES.md)
-4. [Compatibility](docs/COMPATIBILITY.md)
-5. [Troubleshooting](docs/TROUBLESHOOTING.md)
+For bugs, please include:
 
-A useful report includes Minecraft version, loader/platform version, MCflare version, whether the route uses Orange proxy / Cloudflare Tunnel / ordinary direct TCP, and the smallest relevant log excerpt.
+- Minecraft version;
+- loader/server platform and version;
+- MCflare version;
+- Orange Cloud, Cloudflare Tunnel, or direct TCP;
+- the smallest useful log excerpt.
 
-MCflare covers Minecraft Java's own connection. Voice-chat UDP, web maps, unrelated mod side sockets, generic TCP/UDP tunnelling, VPN/WARP setup, and general Cloudflare account administration are outside project scope.
-
-For security-sensitive reports, use [SECURITY.md](SECURITY.md) instead of posting exploit details or credentials publicly.
+Do not post credentials, authentication tokens, or player public IPs. Security reports should follow [SECURITY.md](SECURITY.md).
