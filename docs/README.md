@@ -26,6 +26,7 @@ If you are just trying to get a server online, start with **Installation → Set
 - [Build matrix](BUILD_MATRIX.md)
 - [Release process](RELEASE.md)
 - [Publishing outside GitHub](PUBLISHING.md)
+- [v1.0.0 release evidence](RELEASE_EVIDENCE_1.0.0.md)
 - [v1.0.0-rc.1 release evidence](RELEASE_EVIDENCE_1.0.0-rc.1.md)
 - [Test matrix](TEST_MATRIX.md)
 - [Authenticated online-mode evidence](TEST_EVIDENCE_2026-09-03.md) — published RC login through true Orange and named Tunnel.

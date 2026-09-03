@@ -6,11 +6,13 @@
 
 Put Cloudflare in front of a Minecraft Java server without making players run a tunnel, VPN, proxy, or custom launcher.
 
+### [Download the latest release →](https://github.com/Phloraxx/mcflare/releases/latest)
+
 [![CI](https://github.com/Phloraxx/mcflare/actions/workflows/ci.yml/badge.svg)](https://github.com/Phloraxx/mcflare/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Phloraxx/mcflare?include_prereleases&sort=semver&label=release)](https://github.com/Phloraxx/mcflare/releases)
 [![License](https://img.shields.io/github/license/Phloraxx/mcflare)](LICENSE)
 
-**[Download](https://github.com/Phloraxx/mcflare/releases)** · **[Wiki](https://github.com/Phloraxx/mcflare/wiki)** · **[Deployment](https://github.com/Phloraxx/mcflare/wiki/Choosing-a-Deployment)** · **[Troubleshooting](https://github.com/Phloraxx/mcflare/wiki/Troubleshooting)**
+**[All releases](https://github.com/Phloraxx/mcflare/releases)** · **[Wiki](https://github.com/Phloraxx/mcflare/wiki)** · **[Deployment](https://github.com/Phloraxx/mcflare/wiki/Choosing-a-Deployment)** · **[Troubleshooting](https://github.com/Phloraxx/mcflare/wiki/Troubleshooting)**
 
 </div>
 

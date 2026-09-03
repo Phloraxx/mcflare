@@ -4,9 +4,24 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 
 ## Unreleased
 
-### Fixed
+## 1.0.0 - 2026-09-03
+
+### Highlights
+
+- First stable release of the rebuilt MCflare transport.
+- Players join with the normal Minecraft server address and need only the matching MCflare mod; no player-side `cloudflared`, WARP, VPN, Tunnel token, custom launcher, or local proxy is required.
+- Fabric/Quilt and NeoForge are supported across Minecraft 1.21.11 and 26.1–26.2, with a Paper/Purpur server plugin for server-side integration.
+- Both Cloudflare Orange Cloud and named Cloudflare Tunnel deployments use the same `/mcflare` WebSocket protocol and player experience.
+- Trusted Cloudflare visitor metadata can restore the real player address through PROXY protocol v1.
+- Authenticated `online-mode=true` world joins are proven through both Orange Cloud and a named Tunnel.
+
+### Changed since 1.0.0-rc.1
 
 - Normalize archive timestamps and file order so clean release builds are byte-reproducible, including Fabric artifacts with nested `core` and `gateway` JARs.
+- Verify downstream release artifact identity before optional distribution publishing.
+- Add the public GitHub Wiki and simplify the repository landing page around downloads, setup, deployment, and troubleshooting.
+- Record the authenticated Mojang/Microsoft `online-mode=true` proof using the published RC artifact.
+- No MCflare wire-protocol or Minecraft transport behavior changed from `1.0.0-rc.1`.
 
 ## 1.0.0-rc.1 - 2026-09-03
 
