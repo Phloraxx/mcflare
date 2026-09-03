@@ -1,8 +1,6 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
     id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
-    id 'maven-publish'
-    id 'idea'
 }
 
 version = providers.gradleProperty('release_version').getOrElse("${mod_version}-dev")
@@ -33,7 +31,6 @@ dependencies {
     include project(':core')
     implementation project(':gateway')
     include project(':gateway')
-
 
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     if (useMojangMappings) {
@@ -69,7 +66,6 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 java {
-    withSourcesJar()
     sourceCompatibility = JavaVersion.toVersion(adapterJavaVersion)
     targetCompatibility = JavaVersion.toVersion(adapterJavaVersion)
 }
@@ -81,14 +77,5 @@ jar {
     }
     from('NOTICE.md') {
         rename { "NOTICE_${inputs.properties.archivesName}.md" }
-    }
-}
-
-publishing {
-    publications {
-        create('mavenJava', MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
-        }
     }
 }

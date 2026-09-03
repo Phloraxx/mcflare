@@ -2,6 +2,8 @@ name: ci
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
@@ -39,7 +41,7 @@ jobs:
             minecraft: '1.21.11'
             minecraft_dependency: '~1.21.11'
             loader: '0.18.2'
-            loom: '1.14-SNAPSHOT'
+            loom: '1.14.10'
             mappings: 'true'
             artifact: '1.21.11'
           - name: Fabric 26.1-26.2 release
@@ -47,7 +49,7 @@ jobs:
             minecraft: '26.1'
             minecraft_dependency: '>=26.1 <26.3'
             loader: '0.18.4'
-            loom: '1.15-SNAPSHOT'
+            loom: '1.15.5'
             mappings: 'false'
             artifact: '26.1-26.2'
           - name: Fabric 26.2 head compatibility
@@ -55,7 +57,7 @@ jobs:
             minecraft: '26.2'
             minecraft_dependency: '~26.2'
             loader: '0.19.3'
-            loom: '1.17-SNAPSHOT'
+            loom: '1.17.20'
             mappings: 'false'
             artifact: '26.2-compat'
     steps:
@@ -99,7 +101,7 @@ jobs:
             fabric_minecraft: '1.21.11'
             fabric_dependency: '~1.21.11'
             fabric_loader: '0.18.2'
-            fabric_loom: '1.14-SNAPSHOT'
+            fabric_loom: '1.14.10'
             fabric_mappings: 'true'
           - name: NeoForge 26.1-26.2 release
             java: '25'
@@ -112,7 +114,7 @@ jobs:
             fabric_minecraft: '26.1'
             fabric_dependency: '>=26.1 <26.3'
             fabric_loader: '0.18.4'
-            fabric_loom: '1.15-SNAPSHOT'
+            fabric_loom: '1.15.5'
             fabric_mappings: 'false'
           - name: NeoForge 26.2 head compatibility
             java: '25'
@@ -125,7 +127,7 @@ jobs:
             fabric_minecraft: '26.2'
             fabric_dependency: '~26.2'
             fabric_loader: '0.19.3'
-            fabric_loom: '1.17-SNAPSHOT'
+            fabric_loom: '1.17.20'
             fabric_mappings: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
