@@ -13,6 +13,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Markdown links and documentation assets
+        run: python3 scripts/check_docs.py
+
   fabric:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest

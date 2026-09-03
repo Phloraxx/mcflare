@@ -1,88 +1,207 @@
 # Real Player IP Preservation
 
-Status: v1 core requirement; locally validated on Fabric and NeoForge 1.21.11/26.1/26.2 and live full-client validated through the Fabric integrated gateway on both true Orange and named Tunnel.
+Cloudflare terminates the public WebSocket, so the Minecraft backend cannot recover the player's Internet address from the backend TCP peer alone. MCflare preserves that address by translating trusted Cloudflare visitor metadata into standard **HAProxy PROXY protocol v1**.
 
-## Problem
+![MCflare real player IP preservation flow](assets/real-ip.webp)
 
-When MCflare opens the backend Minecraft TCP connection, the backend socket naturally sees the gateway/local proxy address. Server logs, IP bans, moderation, geolocation, and rate-limiting often need the real player address.
+> This feature has a security boundary: forwarding headers are trustworthy only when the gateway is actually reached through trusted Cloudflare/reverse-proxy infrastructure.
 
-Do not add a custom MCflare identity packet. HTTP and TCP ecosystems already provide the required primitives.
+## At a glance
 
-## Cloudflare -> MCflare
+```text
+player address
+    ↓
+Cloudflare visitor metadata
+    ↓
+MCflare gateway validates IP literal
+    ↓
+PROXY TCP4 / TCP6 line
+    ↓
+Minecraft/server platform restores remote address
+    ↓
+normal Minecraft bytes continue unchanged
+```
 
-For ordinary HTTP/WebSocket proxying, Cloudflare sends the connecting visitor address to the origin in `CF-Connecting-IP`. If Pseudo IPv4 is configured to overwrite headers, the real IPv6 address is preserved in `CF-Connecting-IPv6`.
+This allows native Minecraft/server tooling such as IP bans, moderation logs, and rate-limit/audit systems to operate on the restored visitor address rather than a loopback/proxy address.
 
-MCflare therefore chooses:
+## Why MCflare uses PROXY protocol
+
+MCflare does not need a custom identity packet. The HTTP and TCP ecosystems already have standard mechanisms for carrying the information across proxy boundaries:
+
+1. Cloudflare supplies visitor metadata on the WebSocket request.
+2. MCflare validates the address.
+3. MCflare emits standard HAProxy PROXY protocol v1 toward the Minecraft backend.
+4. The Minecraft-side integration consumes the prefix and then receives the untouched Minecraft stream.
+
+Real-IP handoff is **outside** the `mcflare.v1` WebSocket subprotocol. The WebSocket still carries only Minecraft TCP bytes.
+
+## Cloudflare → MCflare
+
+For ordinary Cloudflare HTTP/WebSocket proxying, the gateway uses:
 
 1. non-empty `CF-Connecting-IPv6`, when present;
 2. otherwise `CF-Connecting-IP`.
 
-The selected value is accepted only as a syntactically valid IPv4/IPv6 literal. It is never passed to DNS resolution; a hostname or malformed address is rejected rather than resolved.
+The selected value must be a syntactically valid IPv4 or IPv6 **literal**. MCflare does not DNS-resolve a hostname supplied in those headers.
 
-`CF-Ray` should be logged as connection correlation metadata, not treated as identity.
+Malformed values are rejected instead of being treated as identity.
 
-## MCflare -> Minecraft
+`CF-Ray` is useful only as sanitized connection-correlation metadata. It is not player identity.
 
-The gateway optionally prepends one HAProxy PROXY protocol v1 line before the untouched Minecraft stream.
+## MCflare → Minecraft
 
-IPv4 shape:
+When PROXY output is enabled, the gateway prepends one PROXY-v1 line before the normal Minecraft stream.
+
+### IPv4 shape
 
 ```text
 PROXY TCP4 <real-player-ip> 127.0.0.1 <source-port> <minecraft-port>\r\n
 ```
 
-IPv6 shape:
+### IPv6 shape
 
 ```text
 PROXY TCP6 <real-player-ip> ::1 <source-port> <minecraft-port>\r\n
 ```
 
-Then the normal Minecraft bytes follow byte-for-byte.
+After that prefix, Minecraft bytes continue byte-for-byte.
 
 ## Source-port semantics
 
-Cloudflare exposes the real visitor IP in HTTP headers but does not expose the player's original TCP source port to this origin application. MCflare therefore uses the non-zero TCP source port of the HTTP/WebSocket ingress connection as an opaque interoperability value. The player IP is authoritative; MCflare does **not** claim that the substituted port is the player's original Internet source port.
+Cloudflare exposes the visitor **IP address** to this HTTP/WebSocket application but does not provide the original player's Internet TCP source port as equivalent application metadata.
 
-The in-project parser accepts the standard PROXY-v1 source-port range, including zero, but the gateway's normal encoded path uses its available nonzero ingress port.
+MCflare therefore uses the available non-zero source port of the HTTP/WebSocket ingress connection as an interoperability value in the PROXY line.
 
-## Fabric and NeoForge implementation
+The restored **IP address** is the meaningful identity. MCflare does not claim that this substituted port is the player's original Internet source port.
 
-The shared dedicated-server adapter wraps Minecraft's existing `ServerConnectionListener` child-channel initializer using Netty's normal `ChannelInitializer` lifecycle. For loopback connections it installs a small detector before ordinary Minecraft decoding.
+## Fabric / Quilt / NeoForge
 
-The detector buffers only enough bytes to distinguish the optional `PROXY ` prefix and enforces the PROXY-v1 108-byte text-line maximum. A valid TCP4/TCP6 line is parsed by MCflare's loader-independent `ProxyProtocolV1` codec, the source address is applied to Minecraft's `Connection.address`, and the remaining bytes continue through the normal Minecraft pipeline.
+The shared dedicated-server adapter integrates with Minecraft's existing connection listener.
 
-If no PROXY header is detected, normal Minecraft bytes continue untouched. Remote direct clients do not receive the trusted local PROXY treatment. MCflare does not bundle or depend on Netty's separate HAProxy codec module.
+For trusted local/loopback gateway connections, it installs a small detector before normal Minecraft decoding:
 
-## Trust model
+1. buffer only enough data to decide whether the stream starts with `PROXY `;
+2. enforce the PROXY-v1 108-byte text-line maximum;
+3. parse valid `TCP4` / `TCP6` source metadata with MCflare's loader-independent codec;
+4. apply the source address to Minecraft's connection remote address;
+5. pass the remaining bytes into the normal Minecraft pipeline.
 
-`CF-Connecting-IP` is trustworthy only when requests genuinely arrive through trusted Cloudflare ingress. A directly reachable HTTP gateway allows a malicious client to forge forwarding headers.
+If there is no PROXY prefix, ordinary Minecraft bytes continue untouched.
 
-Recommended deployment:
-
-- Tunnel: keep the gateway private/loopback or private-network reachable from cloudflared.
-- Orange: keep the gateway behind the reverse proxy and restrict the public origin to Cloudflare where operationally possible; Authenticated Origin Pulls is an optional infrastructure hardening layer.
-- Minecraft-side PROXY parser: trust only the integrated/local MCflare gateway by default.
-
-Multi-tenant hosts should review loopback trust carefully if untrusted tenants share a network namespace.
+Remote direct clients do not receive this trusted-local treatment by default. MCflare also avoids adding Netty's separate HAProxy codec module; the parser uses the Netty/core types already available in the server environment.
 
 ## Paper / Purpur / proxy stacks
 
-Paper and Purpur expose native `proxies.proxy-protocol` handling in their global configuration. MCflare's Paper plugin therefore does not patch Minecraft networking or parse PROXY itself: it starts the shared gateway, which emits standard PROXY v1, and the server platform restores the address. The same final plugin SHA passed TCP4 and TCP6 WSS->PROXY Status on Paper and Purpur 1.21.11, 26.1.2 and 26.2. Velocity likewise has native HAProxy protocol support. Prefer platform-native PROXY handling wherever available.
+Paper and Purpur already expose native HAProxy PROXY-protocol handling. MCflare's Paper plugin therefore does not patch the server's network pipeline just to parse the header.
 
-## Proven tests
+Configure both sides consistently:
 
-### Local synthetic Cloudflare proof
+### MCflare plugin
 
-Fabric 26.2 server at `127.0.0.1:25585`, MCflare gateway at `127.0.0.1:25587`. A synthetic WSS request included `CF-Connecting-IP: 198.51.100.42`; MCflare emitted PROXY v1 and a real Minecraft Status request/response succeeded. The same parser/lifecycle was subsequently runtime-proven on Fabric 26.1 plus NeoForge 1.21.11, 26.1 and 26.2, including synthetic TCP6.
+```yaml
+proxy-protocol: true
+```
 
-### Live Cloudflare proof
+### Paper/Purpur global configuration
 
-On 2026-09-01 both `orange-test.example.com/mcflare` and `tunnel-test.example.com/mcflare` were routed to the integrated Fabric gateway. Initial Status probes returned the distinct dev-server response and logged `realIpPresent=true` plus `cfRayPresent=true`.
+```yaml
+proxies:
+  proxy-protocol: true
+```
 
-The stronger acceptance then used the actual Fabric 26.1 Minecraft client under an isolated ARM64 Oracle Docker/Xvfb/Mesa-llvmpipe environment. Quick Play joined the isolated world through true Orange and then through the named Tunnel. The server logged `Player357[/<redacted-public-ip>:60826] logged in` for Orange and `Player977[/<redacted-public-ip>:49428] logged in` for Tunnel; `<redacted-public-ip>` independently matched the Oracle client host public IPv4. A later true-Orange run joined as `Player393[/<redacted-public-ip>:53422]`; issuing Minecraft's native `ban-ip <redacted-public-ip>` immediately disconnected that player, and a fresh real-client attempt was rejected as `Player44 (/<redacted-public-ip>:42538)` with `Your IP address is banned from this server.` The test IP was then pardoned. This proves the restored address reaches Minecraft's native enforcement path, not only Status/logging. The server was intentionally `online-mode=false`, so this does not claim Mojang session-authentication coverage.
+The gateway emits PROXY v1; the server platform restores the remote address.
+
+If MCflare fronts another Minecraft proxy such as Velocity, prefer that proxy's native HAProxy/PROXY support where available.
+
+## Trust model
+
+### Safe principle
+
+Treat `CF-Connecting-IP` / `CF-Connecting-IPv6` as trusted visitor metadata only when the request path is controlled by Cloudflare/trusted reverse-proxy infrastructure.
+
+A client can trivially invent a header named `CF-Connecting-IP` when it can reach the gateway directly.
+
+### Named Tunnel
+
+Recommended shape:
+
+```text
+Cloudflare → named Tunnel → local/private cloudflared → loopback/private MCflare gateway
+```
+
+The gateway does not need a public arbitrary-client listener.
+
+### Orange proxy
+
+Recommended shape:
+
+```text
+Cloudflare → protected HTTPS reverse proxy → private/loopback MCflare gateway
+```
+
+Protect the origin separately. A proxied DNS record does not itself make a reachable origin trustworthy.
+
+### Minecraft-side parser
+
+Fabric/Quilt/NeoForge trust PROXY metadata only from the intended local gateway boundary by default.
+
+Paper/Purpur native PROXY configuration effectively turns that Minecraft listener into a trusted proxy backend, so it should be private/firewalled against raw player connections.
+
+### Multi-tenant hosts
+
+If untrusted tenants share a host/network namespace, review loopback trust before using the default local-only model. “Loopback” is not an authorization boundary between mutually untrusted processes sharing the same namespace.
+
+## What the gateway logs
+
+Operational gateway events record whether a forwarded IP was present—not the raw player address itself. Sanitized CF-Ray values may be retained for correlation.
+
+This keeps normal platform logs useful without turning MCflare's own operational logs into an unnecessary address ledger.
+
+## Proven behavior
+
+The current implementation has been exercised for:
+
+- synthetic TCP4 and TCP6 PROXY-v1 paths;
+- Fabric and NeoForge server integrations across the supported version families;
+- Paper/Purpur native PROXY handling;
+- live Cloudflare Orange and named-Tunnel full-client joins;
+- external IPv6 visitor restoration;
+- Minecraft native IP-ban behavior using the restored address.
+
+Detailed test runs, redacted evidence, and exact acceptance conditions are retained in [TEST_EVIDENCE_2026-09-01.md](TEST_EVIDENCE_2026-09-01.md) and summarized in [TEST_MATRIX.md](TEST_MATRIX.md).
+
+The repository intentionally does not publish raw test-player addresses in current documentation.
+
+## Common failure patterns
+
+### Minecraft disconnects immediately after backend connect
+
+Gateway and backend probably disagree about PROXY mode. If the gateway emits `PROXY ...` but Minecraft expects a normal handshake byte, Minecraft interprets the prefix as invalid protocol data.
+
+### Server still sees loopback/proxy address
+
+Check that:
+
+- Cloudflare forwarding metadata reaches MCflare;
+- gateway PROXY output is enabled;
+- the backend's PROXY parser/native setting is enabled;
+- you are inspecting the restored Minecraft remote address rather than the gateway socket peer.
+
+### A forged address appears possible
+
+Treat that as an ingress-security failure. Restrict the gateway/reverse proxy path so untrusted clients cannot directly submit forwarding headers to the trusted component.
+
+See [Troubleshooting](TROUBLESHOOTING.md#real-player-ip-is-missing-or-wrong).
 
 ## References
 
-- Cloudflare HTTP headers: https://developers.cloudflare.com/fundamentals/reference/http-headers/
-- HAProxy PROXY protocol specification: https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt
-- Paper PROXY protocol setting: https://docs.papermc.io/paper/reference/global-configuration/
+- [Cloudflare HTTP request headers](https://developers.cloudflare.com/fundamentals/reference/http-headers/)
+- [HAProxy PROXY protocol specification](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt)
+- [Paper global configuration](https://docs.papermc.io/paper/reference/global-configuration/)
+
+## Related docs
+
+- [Deployment](DEPLOYMENT.md)
+- [Concepts](CONCEPTS.md#proxy-protocol-v1)
+- [Compatibility](COMPATIBILITY.md)
+- [Troubleshooting](TROUBLESHOOTING.md)

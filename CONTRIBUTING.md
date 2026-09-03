@@ -58,4 +58,14 @@ Large protocol changes should be discussed in an issue before implementation bec
 
 ## Documentation
 
-User-facing behavior belongs in `README.md`, `docs/INSTALLATION.md`, `docs/DEPLOYMENT.md`, or `docs/TROUBLESHOOTING.md`. Deep experimental evidence should stay out of the onboarding path and go in the maintainer evidence docs.
+User-facing behavior belongs in `README.md` and the guided docs such as `docs/INSTALLATION.md`, `docs/SETUP_CHOICES.md`, `docs/FAQ.md`, `docs/DEPLOYMENT.md`, or `docs/TROUBLESHOOTING.md`. Deep experimental evidence should stay out of the onboarding path and go in the maintainer evidence docs.
+
+Keep the root README text-first. Conceptual artwork belongs under `docs/assets/` and should be paired with authoritative text or Mermaid/code examples so documentation remains searchable, accessible, and useful without the image.
+
+Before opening a documentation PR, run:
+
+```bash
+python3 scripts/check_docs.py
+```
+
+The checker validates local Markdown paths/anchors, required documentation artwork, and the README artwork boundary.
