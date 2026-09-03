@@ -4,6 +4,17 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 
 ## Unreleased
 
+### Fixed
+
+- Close active client sessions when the shared gateway is stopped, so plugin/server shutdown cannot leave old gateway threads and backend streams alive.
+- Prevent a carrier from being attached after its Minecraft `Connection` has already begun disconnecting.
+- Preserve thread interruption during route discovery instead of turning an interrupted probe into an ordinary negative-cache result.
+
+### Changed
+
+- Advance ordinary development builds to `1.0.1-dev` after the `1.0.0` stable release.
+- Remove the unused client carrier getter from the internal Mixin bridge.
+
 ## 1.0.0 - 2026-09-03
 
 ### Highlights
