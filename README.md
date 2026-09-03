@@ -4,13 +4,11 @@
 [![Release](https://img.shields.io/github/v/release/Phloraxx/mcflare?include_prereleases&sort=semver)](https://github.com/Phloraxx/mcflare/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Put a Minecraft Java server behind Cloudflare without changing how players join.**
+Put a Minecraft Java server behind Cloudflare while players keep using a normal Minecraft address.
 
-Players install the MCflare mod, add the server with its normal hostname, and use Minecraft's normal **Join Server** button. They do not run `cloudflared`, WARP, a VPN, a separate launcher, or a local proxy.
+Players install the matching MCflare mod and join the server as usual, for example `play.example.com`. They do not need `cloudflared`, WARP, a VPN, a custom launcher, or a local proxy.
 
-MCflare carries the Minecraft TCP connection through Cloudflare as a WebSocket and turns it back into an ordinary Minecraft connection at the server. It works with both Orange Cloud proxying and Cloudflare Tunnel, and can preserve the real player IP with PROXY protocol v1.
-
-[Download](https://github.com/Phloraxx/mcflare/releases) · [Install](docs/INSTALLATION.md) · [Deploy](docs/DEPLOYMENT.md) · [FAQ](docs/FAQ.md)
+[Download](https://github.com/Phloraxx/mcflare/releases) · [Installation](docs/INSTALLATION.md) · [Deployment](docs/DEPLOYMENT.md) · [FAQ](docs/FAQ.md)
 
 ## Install
 
@@ -24,31 +22,11 @@ Download the current release from [GitHub Releases](https://github.com/Phloraxx/
 | NeoForge 26.1–26.2 | `mcflare-neoforge-26.1-26.2-<version>.jar` |
 | Paper / Purpur | `mcflare-paper-<version>.jar` |
 
-For Fabric, Quilt, and NeoForge, install the matching JAR on the player and the modded server. Paper/Purpur only needs the server plugin; players use the Fabric/Quilt or NeoForge mod.
+For Fabric, Quilt, and NeoForge, use the matching JAR on the player and the modded server. Paper/Purpur uses the server plugin; players use the Fabric/Quilt or NeoForge mod.
 
-Then route `/mcflare` from your public hostname to the MCflare gateway. The exact reverse-proxy or Tunnel setup is covered in [Deployment](docs/DEPLOYMENT.md).
+On the server side, route `/mcflare` from the public hostname to the MCflare gateway. [Deployment](docs/DEPLOYMENT.md) has working examples for reverse proxies and Cloudflare Tunnel.
 
-Players connect to the normal address, for example:
-
-```text
-play.example.com
-```
-
-No WebSocket URL is entered in Minecraft.
-
-## How it works
-
-```text
-Minecraft client → Cloudflare → MCflare gateway → Minecraft server
-```
-
-Minecraft Java uses raw TCP. Cloudflare's normal HTTP proxy does not proxy that protocol directly, so MCflare carries the same byte stream inside a standard WebSocket. It does not translate gameplay packets or invent a second Minecraft protocol.
-
-If a hostname has already proved that it supports MCflare, the client remembers that and will not silently fall back to a raw origin later. Servers that do not use MCflare continue to use ordinary Minecraft TCP.
-
-For protocol and trust details, see [Architecture](docs/V1_ARCHITECTURE.md), [Wire protocol](docs/V1_PROTOCOL.md), and [Real player IP](docs/REAL_IP.md).
-
-## Platforms
+## Supported platforms
 
 | Platform | Player | Server |
 |---|---:|---:|
@@ -60,9 +38,19 @@ For protocol and trust details, see [Architecture](docs/V1_ARCHITECTURE.md), [Wi
 
 Current release families support Minecraft **1.21.11** and **26.1–26.2**. See [Compatibility](docs/COMPATIBILITY.md) for the exact Java and loader versions tested in CI.
 
-MCflare only carries Minecraft Java's own connection. Separate UDP/TCP sockets used by voice chat, web maps, or other mods are outside its scope.
+## How it works
 
-## Docs and development
+```text
+Minecraft client → Cloudflare → MCflare gateway → Minecraft server
+```
+
+MCflare carries Minecraft Java's existing TCP byte stream through a WebSocket and turns it back into a normal Minecraft connection at the server. It works with either Cloudflare's Orange Cloud proxy or a named Cloudflare Tunnel.
+
+Real player IP forwarding is supported through trusted Cloudflare visitor metadata and PROXY protocol v1. The protocol, trust model, and downgrade behavior are documented in [Architecture](docs/V1_ARCHITECTURE.md), [Wire protocol](docs/V1_PROTOCOL.md), and [Real player IP](docs/REAL_IP.md).
+
+MCflare only carries Minecraft Java's own connection. Voice chat, web maps, and other separate sockets need their own path.
+
+## Documentation
 
 - [Installation](docs/INSTALLATION.md)
 - [Choose between Orange Cloud and Tunnel](docs/SETUP_CHOICES.md)
