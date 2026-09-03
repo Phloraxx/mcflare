@@ -61,7 +61,7 @@ class RouteResolverTest {
         try (RouteResolver resolver = new RouteResolver()) {
             Method remember = RouteResolver.class.getDeclaredMethod("rememberNegative", String.class, long.class);
             remember.setAccessible(true);
-            long now = System.currentTimeMillis();
+            long now = System.nanoTime();
             for (int i = 0; i < 2_000; i++) {
                 remember.invoke(resolver, "ordinary-" + i + ".example.test:25565", now);
             }

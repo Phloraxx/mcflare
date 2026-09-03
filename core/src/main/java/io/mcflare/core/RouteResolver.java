@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Version/loader-independent zero-config route selection. */
 public final class RouteResolver implements Closeable {
-    private static final long NEGATIVE_TTL_MS = 30L * 1000L;
+    private static final long NEGATIVE_TTL_NANOS = TimeUnit.SECONDS.toNanos(30L);
     private static final int DIRECT_CONNECT_TIMEOUT_MS = 1200;
     private static final int SECURE_PREFERENCE_GRACE_MS = 1500;
     private static final int DISCOVERY_TIMEOUT_MS = 4500;
@@ -46,10 +46,10 @@ public final class RouteResolver implements Closeable {
         if (!isProbeCandidate(host)) return null;
         final String key = host + ":" + logicalPort;
         if (knownRoutes.contains(key)) return carrierFrom(openRequired(host), host, errorHandler);
-        final long now = System.currentTimeMillis();
+        final long now = System.nanoTime();
         Long negativeUntil = negativeCache.get(key);
         if (negativeUntil != null) {
-            if (negativeUntil > now) return null;
+            if (negativeUntil - now > 0L) return null;
             negativeCache.remove(key, negativeUntil);
         }
 
@@ -97,12 +97,12 @@ public final class RouteResolver implements Closeable {
     }
 
     private void rememberNegative(String key, long now) {
-        negativeCache.put(key, now + NEGATIVE_TTL_MS);
+        negativeCache.put(key, now + NEGATIVE_TTL_NANOS);
         if (negativeCache.size() <= NEGATIVE_CACHE_MAX_ENTRIES) return;
 
         for (String candidate : negativeCache.keySet()) {
             Long until = negativeCache.get(candidate);
-            if (until != null && until <= now) negativeCache.remove(candidate, until);
+            if (until != null && until - now <= 0L) negativeCache.remove(candidate, until);
         }
         if (negativeCache.size() <= NEGATIVE_CACHE_MAX_ENTRIES) return;
 
