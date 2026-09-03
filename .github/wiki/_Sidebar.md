@@ -26,4 +26,5 @@
 
 - [Contributing](Contributing.md)
 - [GitHub repository](https://github.com/Phloraxx/mcflare)
-- [Releases](https://github.com/Phloraxx/mcflare/releases)
+- [Latest release](https://github.com/Phloraxx/mcflare/releases/latest)
+- [All releases](https://github.com/Phloraxx/mcflare/releases)
