@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,12 +24,14 @@ import java.util.function.Consumer;
 /** Minimal HTTP/WebSocket gateway: one MCflare stream maps to one Minecraft TCP stream. */
 public final class McflareGateway implements Closeable {
     private static final int DEFAULT_MAX_CONNECTIONS = 256;
+    private static final int DEFAULT_PRE_BACKEND_TIMEOUT_MS = 10_000;
 
     private final InetSocketAddress listen;
     private final InetSocketAddress minecraft;
     private final Semaphore connectionSlots;
     private final Set<Socket> activeClients = ConcurrentHashMap.newKeySet();
     private final int maxConnections;
+    private final int preBackendTimeoutMs;
     private final boolean proxyProtocol;
     private final Consumer<String> infoLog;
     private final Consumer<String> errorLog;
@@ -37,12 +40,13 @@ public final class McflareGateway implements Closeable {
     private volatile ServerSocket listener;
 
     private McflareGateway(InetSocketAddress listen, InetSocketAddress minecraft,
-                           int maxConnections, boolean proxyProtocol,
+                           int maxConnections, boolean proxyProtocol, int preBackendTimeoutMs,
                            Consumer<String> infoLog, Consumer<String> errorLog) {
         this.listen = listen;
         this.minecraft = minecraft;
         this.connectionSlots = new Semaphore(maxConnections);
         this.maxConnections = maxConnections;
+        this.preBackendTimeoutMs = preBackendTimeoutMs;
         this.proxyProtocol = proxyProtocol;
         this.infoLog = infoLog;
         this.errorLog = errorLog;
@@ -55,7 +59,7 @@ public final class McflareGateway implements Closeable {
         boolean proxyProtocol = args.length > 3 && Boolean.parseBoolean(args[3]);
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
         McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
-                System.out::println, System.err::println);
+                DEFAULT_PRE_BACKEND_TIMEOUT_MS, System.out::println, System.err::println);
         gateway.bindListener();
         gateway.runLoop();
     }
@@ -68,9 +72,18 @@ public final class McflareGateway implements Closeable {
     public static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
                                              int maxConnections, boolean proxyProtocol,
                                              Consumer<String> infoLog, Consumer<String> errorLog) throws IOException {
+        return startAsync(listen, minecraft, maxConnections, proxyProtocol,
+                DEFAULT_PRE_BACKEND_TIMEOUT_MS, infoLog, errorLog);
+    }
+
+    static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
+                                      int maxConnections, boolean proxyProtocol, int preBackendTimeoutMs,
+                                      Consumer<String> infoLog, Consumer<String> errorLog) throws IOException {
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
+        if (preBackendTimeoutMs < 1) throw new IllegalArgumentException("pre-backend timeout must be positive");
         if (infoLog == null || errorLog == null) throw new IllegalArgumentException("log consumers are required");
-        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol, infoLog, errorLog);
+        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
+                preBackendTimeoutMs, infoLog, errorLog);
         gateway.bindListener();
         Thread thread = new Thread(gateway::runLoop, "mcflare-gateway-accept");
         thread.setDaemon(true);
@@ -83,7 +96,8 @@ public final class McflareGateway implements Closeable {
         server.bind(listen);
         listener = server;
         infoLog.accept("MCFLARE_GATEWAY event=listen listen=" + listen + " minecraft=" + minecraft
-                + " maxConnections=" + maxConnections + " proxyProtocol=" + proxyProtocol);
+                + " maxConnections=" + maxConnections + " preBackendTimeoutMs=" + preBackendTimeoutMs
+                + " proxyProtocol=" + proxyProtocol);
     }
 
     private void runLoop() {
@@ -147,7 +161,16 @@ public final class McflareGateway implements Closeable {
             // connection or trip Minecraft's pre-handshake read timeout.
             stage = "pre-backend";
             byte[] firstData = new byte[64 * 1024];
-            int firstRead = webSocket.read(firstData, 0, firstData.length);
+            final int firstRead;
+            webSocket.setReadDeadline(preBackendTimeoutMs);
+            try {
+                firstRead = webSocket.read(firstData, 0, firstData.length);
+            } catch (SocketTimeoutException timeout) {
+                termination.compareAndSet("unknown", "pre-backend-timeout");
+                return;
+            } finally {
+                webSocket.setReadDeadline(0);
+            }
             if (firstRead < 0) {
                 termination.compareAndSet("unknown", "client-close-before-backend");
                 return;

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -40,6 +41,45 @@ class Rfc6455ClientCloseTest {
             assertEquals(0x8, close.opcode);
             assertArrayEquals(new byte[0], close.payload);
             assertEquals(-1, peer.getInputStream().read());
+        }
+    }
+
+    @Test void oneByteClosePayloadIsRejected() throws Exception {
+        assertInvalidServerClose(new byte[] {0x03});
+    }
+
+    @Test void reservedCloseCodeIsRejected() throws Exception {
+        assertInvalidServerClose(new byte[] {0x03, (byte) 0xED}); // 1005 must not appear on the wire
+    }
+
+    @Test void malformedUtf8CloseReasonIsRejected() throws Exception {
+        assertInvalidServerClose(new byte[] {0x03, (byte) 0xE8, (byte) 0xC3, 0x28});
+    }
+
+    @Test void nonMinimalExtendedLengthIsRejected() throws Exception {
+        try (ServerSocket server = new ServerSocket(0);
+             Socket raw = new Socket("127.0.0.1", server.getLocalPort());
+             Socket peer = server.accept()) {
+            Rfc6455Client client = wrap(raw);
+            peer.getOutputStream().write(new byte[] {(byte) 0x82, 126, 0, 1, 'x'});
+            peer.getOutputStream().flush();
+            IOException error = assertThrows(IOException.class, client::readData);
+            assertTrue(error.getMessage().contains("Non-minimal"));
+            client.close();
+        }
+    }
+
+    private static void assertInvalidServerClose(byte[] payload) throws Exception {
+        try (ServerSocket server = new ServerSocket(0);
+             Socket raw = new Socket("127.0.0.1", server.getLocalPort());
+             Socket peer = server.accept()) {
+            Rfc6455Client client = wrap(raw);
+            peer.getOutputStream().write(0x88);
+            peer.getOutputStream().write(payload.length);
+            peer.getOutputStream().write(payload);
+            peer.getOutputStream().flush();
+            assertThrows(IOException.class, client::readData);
+            client.close();
         }
     }
 

@@ -14,6 +14,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -57,7 +59,7 @@ public final class Rfc6455Client implements Closeable {
     public static Rfc6455Client connect(String host, int port, String path,
                                          int connectTimeoutMs, int readTimeoutMs,
                                          String requiredSubprotocol) throws IOException {
-        if (host == null || host.trim().isEmpty()) throw new IllegalArgumentException("host");
+        host = validateHost(host);
         if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("path");
 
         Socket raw = connectTcp(host, port, connectTimeoutMs);
@@ -91,6 +93,7 @@ public final class Rfc6455Client implements Closeable {
             return socket;
         }
 
+        final Object stateLock = new Object();
         final AtomicReference<Socket> winner = new AtomicReference<Socket>();
         final AtomicReference<IOException> lastError = new AtomicReference<IOException>();
         final AtomicInteger remaining = new AtomicInteger(addresses.length);
@@ -106,15 +109,18 @@ public final class Rfc6455Client implements Closeable {
                     Socket candidate = null;
                     try {
                         if (delayMs > 0) Thread.sleep(delayMs);
-                        if (finished.get() || winner.get() != null) return;
+                        synchronized (stateLock) {
+                            if (finished.get() || winner.get() != null) return;
+                        }
                         candidate = new Socket();
                         int attemptTimeout = Math.max(250, timeoutMs - Math.min(timeoutMs - 1, delayMs));
                         candidate.connect(new InetSocketAddress(address, port), attemptTimeout);
-                        if (finished.get() || !winner.compareAndSet(null, candidate)) {
-                            try { candidate.close(); } catch (IOException ignored) {}
-                        } else {
-                            completed.countDown();
-                            candidate = null;
+                        synchronized (stateLock) {
+                            if (!finished.get() && winner.get() == null) {
+                                winner.set(candidate);
+                                completed.countDown();
+                                candidate = null;
+                            }
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -135,17 +141,24 @@ public final class Rfc6455Client implements Closeable {
         try {
             completed.await(timeoutMs + 500L, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            finished.set(true);
+            Socket interruptedWinner;
+            synchronized (stateLock) {
+                finished.set(true);
+                interruptedWinner = winner.getAndSet(null);
+            }
+            if (interruptedWinner != null) {
+                try { interruptedWinner.close(); } catch (IOException ignored) {}
+            }
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while connecting to " + host, e);
         }
 
-        Socket selected = winner.get();
-        if (selected != null) {
+        final Socket selected;
+        synchronized (stateLock) {
             finished.set(true);
-            return selected;
+            selected = winner.get();
         }
-        finished.set(true);
+        if (selected != null) return selected;
         IOException error = lastError.get();
         if (error != null) throw error;
         throw new SocketTimeoutException("Connect timed out: " + host + ":" + port);
@@ -174,7 +187,7 @@ public final class Rfc6455Client implements Closeable {
                 + "Sec-WebSocket-Key: " + key + "\r\n"
                 + "Sec-WebSocket-Version: 13\r\n"
                 + (requiredSubprotocol == null ? "" : "Sec-WebSocket-Protocol: " + requiredSubprotocol + "\r\n")
-                + "User-Agent: MCflare/0.1\r\n\r\n";
+                + "\r\n";
         output.write(request.getBytes(StandardCharsets.US_ASCII));
         output.flush();
 
@@ -185,7 +198,7 @@ public final class Rfc6455Client implements Closeable {
     static void validateUpgradeResponse(String headers, String key, String requiredSubprotocol)
             throws IOException {
         String[] lines = headers.split("\\r\\n");
-        if (lines.length == 0 || !lines[0].contains(" 101 ")) {
+        if (lines.length == 0 || !("HTTP/1.1 101".equals(lines[0]) || lines[0].startsWith("HTTP/1.1 101 "))) {
             throw new IOException("WebSocket upgrade failed: " + (lines.length == 0 ? "empty response" : lines[0]));
         }
 
@@ -330,11 +343,15 @@ public final class Rfc6455Client implements Closeable {
             boolean fin = (first & 0x80) != 0;
             boolean masked = (second & 0x80) != 0;
             if (masked) throw new IOException("Server WebSocket frame must not be masked");
-            long length = second & 0x7F;
-            if (length == 126) length = readUnsigned(2);
-            else if (length == 127) {
+            int lengthCode = second & 0x7F;
+            long length = lengthCode;
+            if (lengthCode == 126) {
+                length = readUnsigned(2);
+                if (length < 126) throw new IOException("Non-minimal WebSocket frame length");
+            } else if (lengthCode == 127) {
                 length = readUnsigned(8);
                 if (length < 0) throw new IOException("Invalid WebSocket 64-bit frame length");
+                if (length <= 0xFFFFL) throw new IOException("Non-minimal WebSocket frame length");
             }
             boolean control = opcode >= 0x8;
             if (control && (!fin || length > 125)) {
@@ -347,6 +364,7 @@ public final class Rfc6455Client implements Closeable {
             byte[] payload = readExact((int) length);
 
             if (opcode == 0x8) {
+                validateClosePayload(payload);
                 synchronized (writeLock) {
                     if (!closed) sendFrameLocked(0x8, payload, 0, payload.length);
                     closed = true;
@@ -372,6 +390,39 @@ public final class Rfc6455Client implements Closeable {
             throw new IOException("Unsupported WebSocket opcode: " + opcode);
         }
         return null;
+    }
+
+    private static void validateClosePayload(byte[] payload) throws IOException {
+        if (payload.length == 1) throw new IOException("Invalid WebSocket close payload length");
+        if (payload.length < 2) return;
+        int code = ((payload[0] & 0xFF) << 8) | (payload[1] & 0xFF);
+        if (code < 1000 || code >= 5000 || code == 1004 || code == 1005
+                || code == 1006 || code == 1015) {
+            throw new IOException("Invalid WebSocket close code: " + code);
+        }
+        if (payload.length > 2) {
+            try {
+                StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(payload, 2, payload.length - 2));
+            } catch (java.nio.charset.CharacterCodingException error) {
+                throw new IOException("Invalid UTF-8 in WebSocket close reason", error);
+            }
+        }
+    }
+
+    private static String validateHost(String host) {
+        if (host == null) throw new IllegalArgumentException("host");
+        String value = host.trim();
+        if (value.isEmpty()) throw new IllegalArgumentException("host");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c <= 0x20 || c == 0x7F || c == '/' || c == '\\') {
+                throw new IllegalArgumentException("invalid host");
+            }
+        }
+        return value;
     }
 
     private long readUnsigned(int bytes) throws IOException {

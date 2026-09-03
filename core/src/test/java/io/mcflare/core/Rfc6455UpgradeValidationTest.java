@@ -30,6 +30,16 @@ class Rfc6455UpgradeValidationTest {
                 response("Sec-WebSocket-Extensions: permessage-deflate\r\n"), KEY, null));
     }
 
+    @Test void nonHttp11SwitchingProtocolsStatusIsRejected() {
+        String invalid = response("").replace("HTTP/1.1 101", "HTTP/1.0 101");
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(invalid, KEY, null));
+    }
+
+    @Test void arbitraryStatusLineContaining101IsRejected() {
+        String invalid = response("").replace("HTTP/1.1 101 Switching Protocols", "NOTHTTP 101 Whatever");
+        assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(invalid, KEY, null));
+    }
+
     private static String response(String extra) {
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");

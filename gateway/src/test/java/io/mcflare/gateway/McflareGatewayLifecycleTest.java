@@ -65,6 +65,25 @@ class McflareGatewayLifecycleTest {
     }
 
     @Test
+    void idleUpgradeTimesOutAndReleasesConnectionSlot() throws Exception {
+        int gatewayPort = freePort();
+        McflareGateway gateway = McflareGateway.startAsync(
+                new InetSocketAddress("127.0.0.1", gatewayPort),
+                new InetSocketAddress("127.0.0.1", freePort()),
+                1, false, 150, ignored -> { }, ignored -> { });
+        try {
+            try (Socket first = openWebSocket(gatewayPort)) {
+                assertPeerClosesPromptly(first);
+            }
+            try (Socket second = openWebSocket(gatewayPort)) {
+                // A second upgrade succeeding proves the timed-out first session released the only slot.
+            }
+        } finally {
+            gateway.close();
+        }
+    }
+
+    @Test
     void gatewayCloseTerminatesActiveSession() throws Exception {
         ServerSocket backendListener = new ServerSocket();
         backendListener.bind(new InetSocketAddress("127.0.0.1", 0));
