@@ -301,7 +301,26 @@ jobs:
           notes = text[start:end].strip()
           if not notes:
               raise SystemExit(f"CHANGELOG.md release section for {version} is empty")
-          Path("release-notes.md").write_text(notes + "\n")
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          intro = "\n".join([
+              "MCflare lets a Minecraft Java server use Cloudflare while players keep the normal **Join Server** experience.",
+              "",
+              f"**Start here:** [README](https://github.com/{repo}#readme) · [Installation](https://github.com/{repo}/blob/main/docs/INSTALLATION.md) · [Deployment](https://github.com/{repo}/blob/main/docs/DEPLOYMENT.md)",
+              "",
+              "### Downloads",
+              "",
+              f"- **Fabric / Quilt 1.21.11:** `mcflare-fabric-1.21.11-{version}.jar`",
+              f"- **Fabric / Quilt 26.1–26.2:** `mcflare-fabric-26.1-26.2-{version}.jar`",
+              f"- **NeoForge 1.21.11:** `mcflare-neoforge-1.21.11-{version}.jar`",
+              f"- **NeoForge 26.1–26.2:** `mcflare-neoforge-26.1-26.2-{version}.jar`",
+              f"- **Paper / Purpur server:** `mcflare-paper-{version}.jar`",
+              "",
+              "---",
+              "",
+              "",
+          ])
+          Path("release-notes.md").write_text(intro + notes + "\n")
           PY
       - name: Publish GitHub Release
         env:

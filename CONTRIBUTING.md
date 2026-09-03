@@ -1,6 +1,6 @@
 # Contributing to MCflare
 
-MCflare is a small hobby project, so contributions should keep the architecture simple rather than add infrastructure for its own sake.
+MCflare is a focused open-source project. Contributions should keep the architecture simple rather than add infrastructure for its own sake.
 
 ## Before changing code
 
@@ -54,7 +54,7 @@ Keep PRs focused. Include:
 
 Do not include credentials, raw player IPs, Minecraft/Microsoft auth tokens, production host secrets, or unrelated server logs in commits/issues.
 
-Large protocol changes should be discussed in an issue before implementation because incompatible wire changes require a new protocol version rather than silently changing `mcflare.v1`.
+Large protocol or architecture ideas should start in [GitHub Discussions](https://github.com/Phloraxx/mcflare/discussions) before implementation. Incompatible wire changes require a new protocol version rather than silently changing `mcflare.v1`.
 
 ## Documentation
 

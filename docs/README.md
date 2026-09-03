@@ -1,16 +1,16 @@
 # MCflare documentation
 
-This is the documentation map for MCflare. You do not need to understand the protocol internals to install or operate it.
+Start here if you want to install, run, troubleshoot, or understand MCflare. You do not need to understand the protocol internals to use it.
 
 ## Pick your path
 
 | I want to… | Start here | Then read |
 |---|---|---|
 | Join an MCflare server as a player | [Installation](INSTALLATION.md#player-installation) | [FAQ](FAQ.md) |
-| Put my Minecraft server behind MCflare | [Choose your setup](SETUP_CHOICES.md) | [Installation](INSTALLATION.md), [Deployment](DEPLOYMENT.md) |
+| Run my Minecraft server through Cloudflare | [Choose your setup](SETUP_CHOICES.md) | [Installation](INSTALLATION.md), [Deployment](DEPLOYMENT.md) |
 | Configure real player IPs | [Real player IP](REAL_IP.md) | [Deployment security](DEPLOYMENT.md#security-checklist) |
 | Check whether my version is supported | [Compatibility](COMPATIBILITY.md) | [Build matrix](BUILD_MATRIX.md) |
-| Fix a connection problem | [Troubleshooting](TROUBLESHOOTING.md) | [FAQ](FAQ.md) |
+| Fix a connection problem | [Troubleshooting](TROUBLESHOOTING.md) | [FAQ](FAQ.md), [Support](../SUPPORT.md) |
 | Understand how MCflare works | [Concepts](CONCEPTS.md) | [v1 architecture](V1_ARCHITECTURE.md) |
 | Implement/interoperate with the wire protocol | [v1 wire protocol](V1_PROTOCOL.md) | [Standards audit](STANDARDS_AUDIT.md) |
 | Build or publish MCflare | [Contributing](../CONTRIBUTING.md) | [Build matrix](BUILD_MATRIX.md), [Release process](RELEASE.md) |
@@ -84,4 +84,4 @@ When historical material conflicts with the current product, the authoritative o
 
 ## Optional future formalization
 
-[IANA subprotocol registration notes](IANA_SUBPROTOCOL_REGISTRATION.md) are retained in case MCflare ever grows into a third-party interoperability ecosystem. Registration is **not** a release requirement for this hobby project.
+[IANA subprotocol registration notes](IANA_SUBPROTOCOL_REGISTRATION.md) are retained in case MCflare ever grows into a third-party interoperability ecosystem. Registration is **not** a release requirement for MCflare v1.
