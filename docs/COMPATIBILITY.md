@@ -208,7 +208,7 @@ Detailed runtime evidence is in [TEST_MATRIX.md](TEST_MATRIX.md) and [TEST_EVIDE
 
 Useful future checks, but not current hobby-release blockers:
 
-- authenticated `online-mode=true` login;
+- additional authenticated real-client coverage on loader families beyond the already-proven Fabric 26.2 path;
 - popular connection-altering mods/proxies relevant to each ecosystem;
 - additional graphical-client/world-generation stress;
 - newer Minecraft families after their hooks/toolchains stabilize.

@@ -33,6 +33,8 @@ If you are just trying to get a server online, start with **Installation → Set
 
 ## Maintainer notes
 
+The GitHub Wiki is maintained from `.github/wiki/`. `python3 scripts/publish_wiki.py --check` validates the rendered pages; after GitHub has initialized the Wiki repository, `python3 scripts/publish_wiki.py --publish` syncs those pages to it.
+
 The remaining files in this directory preserve design decisions, standards work, experiments, and regression evidence. They are useful when changing MCflare, but they are not required reading for users.
 
 Useful references include:

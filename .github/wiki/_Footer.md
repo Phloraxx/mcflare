@@ -1,0 +1,1 @@
+MCflare is an independent MIT-licensed hobby project. It is not affiliated with Mojang Studios, Microsoft, or Cloudflare. [Repository](https://github.com/Phloraxx/mcflare) · [License](https://github.com/Phloraxx/mcflare/blob/main/LICENSE) · [Attribution](https://github.com/Phloraxx/mcflare/blob/main/NOTICE.md)
