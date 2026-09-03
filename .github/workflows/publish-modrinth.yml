@@ -1,0 +1,66 @@
+name: publish-modrinth
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to publish, for example v1.0.0-rc.1
+        required: true
+        type: string
+      project:
+        description: Modrinth project ID or slug; falls back to MODRINTH_PROJECT_ID repository variable
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-modrinth-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve Modrinth project
+        id: project
+        shell: bash
+        env:
+          INPUT_PROJECT: ${{ inputs.project }}
+          DEFAULT_PROJECT: ${{ vars.MODRINTH_PROJECT_ID }}
+        run: |
+          PROJECT="$INPUT_PROJECT"
+          if [[ -z "$PROJECT" ]]; then PROJECT="$DEFAULT_PROJECT"; fi
+          test -n "$PROJECT" || { echo 'Set the workflow project input or repository variable MODRINTH_PROJECT_ID.' >&2; exit 1; }
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+
+      - name: Download published GitHub release bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh release download "${{ inputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern '*.jar' \
+            --pattern 'SHA256SUMS.txt' \
+            --dir dist
+          gh release view "${{ inputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --json body \
+            --jq .body > release-notes.md
+
+      - name: Publish exact release artifacts to Modrinth
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: >-
+          python3 scripts/publish_modrinth.py
+          --project "${{ steps.project.outputs.project }}"
+          --tag "${{ inputs.tag }}"
+          --dist dist
+          --changelog-file release-notes.md
