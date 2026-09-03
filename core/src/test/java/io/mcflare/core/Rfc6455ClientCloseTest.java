@@ -52,8 +52,25 @@ class Rfc6455ClientCloseTest {
         assertInvalidServerClose(new byte[] {0x03, (byte) 0xED}); // 1005 must not appear on the wire
     }
 
+    @Test void reservedUnallocatedCloseCodeIsRejected() throws Exception {
+        assertInvalidServerClose(new byte[] {0x07, (byte) 0xD0}); // 2000 is reserved without an extension
+    }
+
     @Test void malformedUtf8CloseReasonIsRejected() throws Exception {
         assertInvalidServerClose(new byte[] {0x03, (byte) 0xE8, (byte) 0xC3, 0x28});
+    }
+
+    @Test void oversizedServerFrameIsRejectedBeforePayloadRead() throws Exception {
+        try (ServerSocket server = new ServerSocket(0);
+             Socket raw = new Socket("127.0.0.1", server.getLocalPort());
+             Socket peer = server.accept()) {
+            Rfc6455Client client = wrap(raw);
+            peer.getOutputStream().write(new byte[] {(byte) 0x82, 127, 0, 0, 0, 0, 0, 0x10, 0, 1});
+            peer.getOutputStream().flush();
+            IOException error = assertThrows(IOException.class, client::readData);
+            assertTrue(error.getMessage().contains("too large"));
+            client.close();
+        }
     }
 
     @Test void nonMinimalExtendedLengthIsRejected() throws Exception {

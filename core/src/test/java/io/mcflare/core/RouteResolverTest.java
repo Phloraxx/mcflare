@@ -5,9 +5,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,5 +43,24 @@ class RouteResolverTest {
         assertFalse(RouteResolver.isProbeCandidate("localhost"));
         assertFalse(RouteResolver.isProbeCandidate("127.0.0.1"));
         assertFalse(RouteResolver.isProbeCandidate("::1"));
+    }
+
+    @Test
+    void negativeCacheRemainsBoundedAcrossManyOneOffHosts() throws Exception {
+        try (RouteResolver resolver = new RouteResolver()) {
+            Method remember = RouteResolver.class.getDeclaredMethod("rememberNegative", String.class, long.class);
+            remember.setAccessible(true);
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < 2_000; i++) {
+                remember.invoke(resolver, "ordinary-" + i + ".example.test:25565", now);
+            }
+
+            Field cacheField = RouteResolver.class.getDeclaredField("negativeCache");
+            cacheField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            ConcurrentHashMap<String, Long> cache =
+                    (ConcurrentHashMap<String, Long>) cacheField.get(resolver);
+            assertTrue(cache.size() <= 512, "negative cache grew to " + cache.size());
+        }
     }
 }

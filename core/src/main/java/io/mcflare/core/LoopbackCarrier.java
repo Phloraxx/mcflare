@@ -81,6 +81,7 @@ public final class LoopbackCarrier implements Closeable {
                 while (!closed.get() && (payload = webSocket.readData()) != null) {
                     localOut.write(payload);
                     localOut.flush();
+                    payload = null;
                 }
             } catch (IOException e) {
                 if (!closed.get() && sessionClosing.compareAndSet(false, true)) report(e);

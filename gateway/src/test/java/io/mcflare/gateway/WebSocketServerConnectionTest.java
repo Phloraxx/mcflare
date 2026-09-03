@@ -120,6 +120,7 @@ class WebSocketServerConnectionTest {
     @Test void malformedClosePayloadsAreRejected() throws Exception {
         assertCloseRejected(new byte[] {0x03});
         assertCloseRejected(new byte[] {0x03, (byte) 0xED});
+        assertCloseRejected(new byte[] {0x07, (byte) 0xD0});
         assertCloseRejected(new byte[] {0x03, (byte) 0xE8, (byte) 0xC3, 0x28});
     }
 

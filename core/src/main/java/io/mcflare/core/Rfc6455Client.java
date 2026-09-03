@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class Rfc6455Client implements Closeable {
     private static final String MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private static final int MAX_HEADERS = 64 * 1024;
-    private static final long MAX_FRAME = 32L * 1024L * 1024L;
+    private static final long MAX_FRAME = 1024L * 1024L;
 
     private final Socket socket;
     private final InputStream input;
@@ -396,8 +396,10 @@ public final class Rfc6455Client implements Closeable {
         if (payload.length == 1) throw new IOException("Invalid WebSocket close payload length");
         if (payload.length < 2) return;
         int code = ((payload[0] & 0xFF) << 8) | (payload[1] & 0xFF);
-        if (code < 1000 || code >= 5000 || code == 1004 || code == 1005
-                || code == 1006 || code == 1015) {
+        boolean standardCode = code >= 1000 && code <= 1014
+                && code != 1004 && code != 1005 && code != 1006;
+        boolean applicationCode = code >= 3000 && code < 5000;
+        if (!standardCode && !applicationCode) {
             throw new IOException("Invalid WebSocket close code: " + code);
         }
         if (payload.length > 2) {

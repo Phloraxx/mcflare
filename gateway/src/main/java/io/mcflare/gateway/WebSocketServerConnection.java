@@ -90,6 +90,10 @@ final class WebSocketServerConnection implements Closeable {
         int count = Math.min(length, current.length - currentOffset);
         System.arraycopy(current, currentOffset, target, offset, count);
         currentOffset += count;
+        if (currentOffset >= current.length) {
+            current = new byte[0];
+            currentOffset = 0;
+        }
         return count;
     }
 
@@ -194,8 +198,10 @@ final class WebSocketServerConnection implements Closeable {
         if (payload.length == 1) throw new IOException("invalid WebSocket close payload length");
         if (payload.length < 2) return;
         int code = ((payload[0] & 0xFF) << 8) | (payload[1] & 0xFF);
-        if (code < 1000 || code >= 5000 || code == 1004 || code == 1005
-                || code == 1006 || code == 1015) {
+        boolean standardCode = code >= 1000 && code <= 1014
+                && code != 1004 && code != 1005 && code != 1006;
+        boolean applicationCode = code >= 3000 && code < 5000;
+        if (!standardCode && !applicationCode) {
             throw new IOException("invalid WebSocket close code: " + code);
         }
         if (payload.length > 2) {

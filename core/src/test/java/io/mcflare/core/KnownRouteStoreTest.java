@@ -6,6 +6,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,6 +37,38 @@ class KnownRouteStoreTest {
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> store.contains("good.example.com:25565"));
         assertTrue(error.getMessage().contains("invalid data"));
+    }
+
+    @Test
+    void persistedPinUsesOwnerOnlyPermissionsWhenPosixIsAvailable() throws Exception {
+        Path directory = tempDir.resolve("pins");
+        Path file = directory.resolve("known-hosts-v1.txt");
+        KnownRouteStore store = new KnownRouteStore(file);
+        store.remember("play.example.com:25565");
+
+        try {
+            Set<PosixFilePermission> filePermissions = Files.getPosixFilePermissions(file);
+            assertFalse(filePermissions.contains(PosixFilePermission.GROUP_READ));
+            assertFalse(filePermissions.contains(PosixFilePermission.OTHERS_READ));
+            Set<PosixFilePermission> directoryPermissions = Files.getPosixFilePermissions(directory);
+            assertFalse(directoryPermissions.contains(PosixFilePermission.GROUP_EXECUTE));
+            assertFalse(directoryPermissions.contains(PosixFilePermission.OTHERS_EXECUTE));
+        } catch (UnsupportedOperationException ignored) {
+            // Non-POSIX filesystems are covered by successful persistence above.
+        }
+    }
+
+    @Test
+    void oversizedPersistedStoreFailsClosedWithoutLoadingIt() throws Exception {
+        Path file = tempDir.resolve("known-hosts-v1.txt");
+        byte[] oversized = new byte[1024 * 1024 + 1];
+        java.util.Arrays.fill(oversized, (byte) 'x');
+        Files.write(file, oversized);
+
+        KnownRouteStore store = new KnownRouteStore(file);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> store.contains("play.example.com:25565"));
+        assertTrue(error.getMessage().contains("too large"));
     }
 
     @Test

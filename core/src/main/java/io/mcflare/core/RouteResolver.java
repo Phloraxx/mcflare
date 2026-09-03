@@ -21,6 +21,8 @@ public final class RouteResolver implements Closeable {
     private static final int DIRECT_CONNECT_TIMEOUT_MS = 1200;
     private static final int SECURE_PREFERENCE_GRACE_MS = 1500;
     private static final int DISCOVERY_TIMEOUT_MS = 4500;
+    private static final int NEGATIVE_CACHE_MAX_ENTRIES = 512;
+    private static final int NEGATIVE_CACHE_TARGET_ENTRIES = 384;
 
     private final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<String, Long>();
     private final ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory());
@@ -86,8 +88,26 @@ public final class RouteResolver implements Closeable {
         closeLateResult(secure);
         direct.cancel(true);
         if (Thread.currentThread().isInterrupted()) return null;
-        negativeCache.put(key, now + NEGATIVE_TTL_MS);
+        rememberNegative(key, now);
         return null;
+    }
+
+    private void rememberNegative(String key, long now) {
+        negativeCache.put(key, now + NEGATIVE_TTL_MS);
+        if (negativeCache.size() <= NEGATIVE_CACHE_MAX_ENTRIES) return;
+
+        for (String candidate : negativeCache.keySet()) {
+            Long until = negativeCache.get(candidate);
+            if (until != null && until <= now) negativeCache.remove(candidate, until);
+        }
+        if (negativeCache.size() <= NEGATIVE_CACHE_MAX_ENTRIES) return;
+
+        int toRemove = negativeCache.size() - NEGATIVE_CACHE_TARGET_ENTRIES;
+        for (String candidate : negativeCache.keySet()) {
+            if (toRemove <= 0) break;
+            if (key.equals(candidate)) continue;
+            if (negativeCache.remove(candidate) != null) toRemove--;
+        }
     }
 
     private LoopbackCarrier rememberAndCarrier(Rfc6455Client webSocket, String key, String host,
