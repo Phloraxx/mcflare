@@ -1,37 +1,37 @@
+<div align="center">
+
 # MCflare Wiki
 
-MCflare puts Cloudflare in front of a Minecraft Java server while players keep using a normal Minecraft address.
+**Practical setup and operations for MCflare.**
 
-This wiki is the practical user and server-admin guide. The repository's [`docs/`](https://github.com/Phloraxx/mcflare/tree/main/docs) directory remains the detailed technical and test record.
+[Repository](https://github.com/Phloraxx/mcflare) · [Releases](https://github.com/Phloraxx/mcflare/releases) · [Discussions](https://github.com/Phloraxx/mcflare/discussions)
 
-## Start here
+</div>
 
-- [Getting started](Getting-Started.md) — install the right file and make the first connection.
-- [Choosing a deployment](Choosing-a-Deployment.md) — Orange Cloud or Cloudflare Tunnel.
-- [Real player IP](Real-Player-IP.md) — restore the visitor address with PROXY v1.
-- [Troubleshooting](Troubleshooting.md) — work through connection failures in the right order.
-- [Compatibility](Compatibility.md) — supported loaders, servers, Minecraft versions, and Java versions.
-- [FAQ](FAQ.md) — short answers to common questions.
+> [!TIP]
+> New to MCflare? Start with **[Getting started](Getting-Started.md)**. It takes you from choosing the JAR to the first normal Minecraft join.
 
-## What players need to know
+## Find the right guide
 
-Install the matching Fabric/Quilt or NeoForge MCflare mod, then join the server normally:
+| I want to… | Read |
+|---|---|
+| install MCflare | [Getting started](Getting-Started.md) |
+| choose Orange Cloud or Tunnel | [Choosing a deployment](Choosing-a-Deployment.md) |
+| configure Orange Cloud | [Orange Cloud](Orange-Cloud.md) |
+| configure a named Tunnel | [Cloudflare Tunnel](Cloudflare-Tunnel.md) |
+| preserve real player IPs | [Real player IP](Real-Player-IP.md) |
+| check supported versions | [Compatibility](Compatibility.md) |
+| fix a connection problem | [Troubleshooting](Troubleshooting.md) |
+| get a short answer | [FAQ](FAQ.md) |
 
-```text
-play.example.com
-```
+## Player vs server
 
-Players do not need `cloudflared`, WARP, a VPN, a Tunnel token, a custom launcher, or a local proxy.
+| Player | Server owner |
+|---|---|
+| Install the matching Fabric/Quilt or NeoForge mod. | Install the matching mod or Paper/Purpur plugin. |
+| Join `play.example.com` normally. | Route exact path `/mcflare` through Cloudflare. |
+| No `cloudflared`, VPN, WARP, token, launcher, or local proxy. | Choose Orange Cloud or a named Tunnel. |
 
-## What server owners need to know
+The public MCflare endpoint is `wss://play.example.com/mcflare` with WebSocket subprotocol `mcflare.v1`.
 
-Install the matching MCflare server mod or Paper/Purpur plugin, then route the exact `/mcflare` WebSocket path through Cloudflare to the MCflare gateway.
-
-The public wire endpoint is:
-
-```text
-wss://play.example.com/mcflare
-Sec-WebSocket-Protocol: mcflare.v1
-```
-
-For the deeper design, see [How MCflare works](How-It-Works.md).
+For protocol design, architecture, build details, and acceptance evidence, use the repository's [technical documentation](https://github.com/Phloraxx/mcflare/tree/main/docs).
