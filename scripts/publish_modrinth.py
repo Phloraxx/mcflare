@@ -85,8 +85,8 @@ def parse_checksums(path: Path) -> dict[str, str]:
     return checksums
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
+def file_hash(path: Path, algorithm: str) -> str:
+    digest = hashlib.new(algorithm)
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
@@ -108,7 +108,7 @@ def verify_bundle(dist: Path, specs: list[dict[str, object]]) -> None:
         expected_hash = checksums.get(filename)
         if expected_hash is None:
             raise ValueError(f"{filename} is absent from SHA256SUMS.txt")
-        actual_hash = sha256(dist / filename)
+        actual_hash = file_hash(dist / filename, "sha256")
         if actual_hash != expected_hash:
             raise ValueError(f"checksum mismatch for {filename}")
 
@@ -152,9 +152,10 @@ def existing_versions(project: str, token: str) -> list[dict[str, object]]:
     return result
 
 
-def already_published(existing: list[dict[str, object]], spec: dict[str, object], version: str) -> bool:
+def already_published(existing: list[dict[str, object]], spec: dict[str, object], version: str, file_path: Path) -> bool:
     wanted_loaders = set(spec["loaders"])  # type: ignore[arg-type]
     wanted_games = set(spec["game_versions"])  # type: ignore[arg-type]
+    wanted_sha512 = file_hash(file_path, "sha512")
     for item in existing:
         if item.get("version_number") != version:
             continue
@@ -162,7 +163,18 @@ def already_published(existing: list[dict[str, object]], spec: dict[str, object]
             continue
         if set(item.get("game_versions", [])) != wanted_games:
             continue
-        return True
+        files = item.get("files", [])
+        if not isinstance(files, list):
+            raise ValueError(f"unexpected files field on existing Modrinth version {item.get('id', '<unknown>')}")
+        for uploaded in files:
+            if not isinstance(uploaded, dict):
+                continue
+            hashes = uploaded.get("hashes", {})
+            if isinstance(hashes, dict) and hashes.get("sha512") == wanted_sha512:
+                return True
+        raise ValueError(
+            f"Modrinth already has {spec['name']} metadata for {version}, but its file hash differs from {file_path.name}"
+        )
     return False
 
 
@@ -236,10 +248,11 @@ def main() -> int:
     try:
         existing = existing_versions(args.project, token)
         for spec in specs:
-            if already_published(existing, spec, version):
-                print(f"Skipping existing Modrinth version: {spec['name']}")
+            file_path = args.dist / str(spec["filename"])
+            if already_published(existing, spec, version, file_path):
+                print(f"Skipping verified existing Modrinth version: {spec['name']}")
                 continue
-            result = publish(args.project, token, spec, version, channel, changelog, args.dist / str(spec["filename"]))
+            result = publish(args.project, token, spec, version, channel, changelog, file_path)
             print(f"Published {spec['name']} as Modrinth version {result.get('id', '<unknown>')}")
             existing.append(result)
     except urllib.error.HTTPError as exc:

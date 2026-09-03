@@ -46,7 +46,7 @@ The workflow:
 2. verifies the exact bundle before doing anything else;
 3. publishes separate Modrinth versions for Fabric/Quilt 1.21.11, Fabric/Quilt 26.1–26.2, NeoForge 1.21.11, NeoForge 26.1–26.2, and Paper/Purpur;
 4. reuses the same MCflare release number across those loader-specific versions;
-5. skips an exact loader/game-version entry if it is already present.
+5. skips an existing loader/game-version entry only when its uploaded SHA-512 matches the GitHub release JAR; a conflicting binary fails the publication run.
 
 Release candidates are published as Modrinth beta versions, alpha releases as alpha, and normal releases as release versions.
 
