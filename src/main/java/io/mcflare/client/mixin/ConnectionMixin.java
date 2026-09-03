@@ -17,10 +17,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Connection.class)
 public abstract class ConnectionMixin implements IConnection {
     @Unique private LoopbackCarrier mcflare$carrier;
+    @Unique private boolean mcflare$disconnected;
 
-    @Inject(method = "disconnect*", at = @At("TAIL"))
+    @Inject(method = "disconnect*", at = @At("HEAD"))
     public void disconnect(Component reason, CallbackInfo callbackInfo) {
         synchronized (this) {
+            mcflare$disconnected = true;
             if (mcflare$carrier != null) {
                 mcflare$carrier.close();
                 mcflare$carrier = null;
@@ -29,8 +31,14 @@ public abstract class ConnectionMixin implements IConnection {
     }
 
     @Intrinsic
-    public void connection$setMcflareCarrier(LoopbackCarrier carrier) { mcflare$carrier = carrier; }
-
-    @Intrinsic
-    public LoopbackCarrier connection$getMcflareCarrier() { return mcflare$carrier; }
+    public void connection$setMcflareCarrier(LoopbackCarrier carrier) {
+        synchronized (this) {
+            if (mcflare$disconnected) {
+                if (carrier != null) carrier.close();
+                return;
+            }
+            if (mcflare$carrier != null && mcflare$carrier != carrier) mcflare$carrier.close();
+            mcflare$carrier = carrier;
+        }
+    }
 }

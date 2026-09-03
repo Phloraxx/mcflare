@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -55,6 +56,41 @@ class McflareGatewayLifecycleTest {
                 assertPeerClosesPromptly(second);
             }
 
+            backend.get(5, TimeUnit.SECONDS);
+        } finally {
+            gateway.close();
+            backendListener.close();
+            backendExecutor.shutdownNow();
+        }
+    }
+
+    @Test
+    void gatewayCloseTerminatesActiveSession() throws Exception {
+        ServerSocket backendListener = new ServerSocket();
+        backendListener.bind(new InetSocketAddress("127.0.0.1", 0));
+        CountDownLatch backendReceived = new CountDownLatch(1);
+        ExecutorService backendExecutor = Executors.newSingleThreadExecutor();
+        Future<Void> backend = backendExecutor.submit(() -> {
+            try (Socket socket = backendListener.accept()) {
+                socket.setSoTimeout(2_000);
+                assertEquals(0, socket.getInputStream().read());
+                backendReceived.countDown();
+                assertEquals(-1, socket.getInputStream().read(), "gateway close must terminate the backend stream");
+            }
+            return null;
+        });
+
+        int gatewayPort = freePort();
+        McflareGateway gateway = McflareGateway.startAsync(
+                new InetSocketAddress("127.0.0.1", gatewayPort),
+                new InetSocketAddress("127.0.0.1", backendListener.getLocalPort()),
+                1, false, ignored -> { }, ignored -> { });
+
+        try (Socket client = openWebSocket(gatewayPort)) {
+            sendMaskedBinary(client, (byte) 0);
+            assertTrue(backendReceived.await(2, TimeUnit.SECONDS), "backend session did not start");
+            gateway.close();
+            assertTcpEofPromptly(client);
             backend.get(5, TimeUnit.SECONDS);
         } finally {
             gateway.close();
@@ -128,6 +164,15 @@ class McflareGatewayLifecycleTest {
             assertEquals(-1, input.read(), "TCP EOF must follow the close frame");
         } catch (SocketTimeoutException timeout) {
             fail("gateway left the WebSocket open after backend EOF", timeout);
+        }
+    }
+
+    private static void assertTcpEofPromptly(Socket socket) throws IOException {
+        socket.setSoTimeout(2_000);
+        try {
+            assertEquals(-1, socket.getInputStream().read(), "gateway close must terminate the client TCP stream");
+        } catch (SocketTimeoutException timeout) {
+            fail("gateway close left an active client session open", timeout);
         }
     }
 }

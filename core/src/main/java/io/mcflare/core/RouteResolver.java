@@ -74,6 +74,8 @@ public final class RouteResolver implements Closeable {
                     return rememberAndCarrier(prepared, key, host, errorHandler);
                 }
             }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         } catch (Exception ignored) {
             Rfc6455Client prepared = await(secure, DISCOVERY_TIMEOUT_MS);
             if (prepared != null) {
@@ -83,6 +85,7 @@ public final class RouteResolver implements Closeable {
 
         closeLateResult(secure);
         direct.cancel(true);
+        if (Thread.currentThread().isInterrupted()) return null;
         negativeCache.put(key, now + NEGATIVE_TTL_MS);
         return null;
     }
@@ -132,7 +135,7 @@ public final class RouteResolver implements Closeable {
         try {
             return Rfc6455Client.connect(host, 443, McflareProtocol.PATH,
                     DISCOVERY_TIMEOUT_MS, 0, McflareProtocol.SUBPROTOCOL);
-        } catch (Exception ignored) {
+        } catch (IOException | RuntimeException ignored) {
             return null;
         }
     }
@@ -140,6 +143,9 @@ public final class RouteResolver implements Closeable {
     private static Rfc6455Client await(CompletableFuture<Rfc6455Client> future, long timeoutMs) {
         try {
             return future.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return null;
         } catch (TimeoutException e) {
             return null;
         } catch (Exception e) {
@@ -155,7 +161,7 @@ public final class RouteResolver implements Closeable {
         try (Socket socket = new Socket()) {
             socket.connect(address, DIRECT_CONNECT_TIMEOUT_MS);
             return true;
-        } catch (Exception ignored) {
+        } catch (IOException | RuntimeException ignored) {
             return false;
         }
     }
