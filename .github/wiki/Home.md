@@ -4,7 +4,7 @@
 
 **Practical setup and operations for MCflare.**
 
-[Repository](https://github.com/Phloraxx/mcflare) · [Releases](https://github.com/Phloraxx/mcflare/releases) · [Discussions](https://github.com/Phloraxx/mcflare/discussions)
+**[Download latest release](https://github.com/Phloraxx/mcflare/releases/latest)** · [Repository](https://github.com/Phloraxx/mcflare) · [All releases](https://github.com/Phloraxx/mcflare/releases) · [Discussions](https://github.com/Phloraxx/mcflare/discussions)
 
 </div>
 

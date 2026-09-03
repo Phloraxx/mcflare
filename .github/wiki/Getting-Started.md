@@ -8,7 +8,7 @@ You need a supported Minecraft/server family, a hostname you control, a Cloudfla
 
 ## 1. Download the right artifact
 
-Use the latest [GitHub Release](https://github.com/Phloraxx/mcflare/releases).
+Use the [latest stable GitHub Release](https://github.com/Phloraxx/mcflare/releases/latest).
 
 | Environment | Player | Server |
 |---|---|---|
