@@ -112,9 +112,9 @@ See [Concepts](docs/CONCEPTS.md#route-discovery-and-positive-pins) and [Troubles
 
 ## Downloads and releases
 
-There is not yet an official GitHub Release for the rebuilt MCflare v1 line. GitHub Releases will be the authoritative source for release binaries.
+The rebuilt MCflare v1 line starts with **`v1.0.0-rc.1`**. GitHub Releases is the authoritative source for release binaries; do not download release JARs from random mirrors.
 
-The release workflow produces five supported JAR families plus `SHA256SUMS.txt`, and has been dry-run end-to-end on `main`.
+Each release contains five supported JAR families plus `SHA256SUMS.txt`. The release workflow builds, verifies, checksums, and publishes those artifacts from the tagged commit.
 
 See [Release process](docs/RELEASE.md).
 

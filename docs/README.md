@@ -62,6 +62,7 @@ Compact statement of the architectural rules that keep MCflare small.
 
 - [Build matrix](BUILD_MATRIX.md) — exact loader/version/toolchain families and CI properties.
 - [Release process](RELEASE.md) — dry-run and tag-driven release workflow.
+- [v1.0.0-rc.1 release evidence](RELEASE_EVIDENCE_1.0.0-rc.1.md) — exact hosted artifact hashes and packaged-JAR smoke results.
 - [Test matrix](TEST_MATRIX.md) — concise list of proven gates and optional future validation.
 
 ## Maintainer evidence and historical research

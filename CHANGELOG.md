@@ -4,6 +4,10 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 
 ## Unreleased
 
+No changes yet.
+
+## 1.0.0-rc.1 - 2026-09-03
+
 ### Added
 
 - Transparent Minecraft TCP transport over `wss://<host>/mcflare` using exact WebSocket subprotocol `mcflare.v1`.
