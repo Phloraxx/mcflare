@@ -38,7 +38,7 @@ git tag -a v1.0.0 -m 'MCflare 1.0.0'
 git push origin v1.0.0
 ```
 
-The tag-triggered workflow rebuilds the same five binary families, generates checksums, and creates the GitHub Release from that tag.
+The tag-triggered workflow rebuilds the same five binary families, generates checksums, and creates the GitHub Release from that tag. Release notes are taken from the matching version section in `CHANGELOG.md`; the publish job fails rather than silently generating unreviewed notes when that section is missing.
 
 ## Version source
 
