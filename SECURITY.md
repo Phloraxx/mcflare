@@ -1,12 +1,12 @@
 # Security policy
 
-MCflare sits on a network trust boundary: it accepts WebSocket traffic, consumes Cloudflare visitor metadata, can emit PROXY protocol, and deliberately prevents silent downgrade for previously proven MCflare hosts.
+MCflare sits on a network trust boundary: it accepts WebSocket traffic, consumes trusted visitor metadata, can emit PROXY protocol, and prevents silent downgrade for previously proven MCflare hosts.
 
 ## Reporting a vulnerability
 
-Prefer a private GitHub Security Advisory for this repository when available (**Security → Advisories → New draft security advisory**).
+Use GitHub's **Report a vulnerability** flow for this repository whenever possible. Private vulnerability reporting is enabled, so security details can be sent directly to the maintainer without opening a public issue.
 
-If you cannot access a private reporting path, open a minimal GitHub issue asking the maintainer for a private channel. Do not include exploit details, credentials, authentication material, or player addresses in that public issue.
+If that flow is unavailable, open a minimal GitHub issue asking for a private contact path. Do **not** include exploit details, credentials, authentication material, or player addresses in the public issue.
 
 ## Never include these in reports
 
@@ -23,9 +23,9 @@ Reports are especially useful for:
 
 - bypass of the `mcflare.v1` handshake/path requirements;
 - downgrade from a persisted known-MCflare route to direct TCP;
-- spoofing/trust-boundary errors in visitor-IP → PROXY-v1 handling;
+- spoofing or trust-boundary errors in visitor-IP → PROXY-v1 handling;
 - unbounded frame/header/resource behavior;
 - cross-session data leakage;
 - credential handling that should not exist in MCflare.
 
-Only the current development line and subsequently published GitHub Releases are expected to receive fixes. Historical inherited tags are not supported release lines.
+Current MCflare releases and the active development line are the supported security targets.

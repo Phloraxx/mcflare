@@ -143,6 +143,6 @@ No. The token is documented locally and works as a private/custom WebSocket subp
 
 ## Where should I report a problem?
 
-Use GitHub Issues for reproducible bugs and [SUPPORT.md](../SUPPORT.md) for usage guidance.
+Use [GitHub Discussions](https://github.com/Phloraxx/mcflare/discussions) for setup questions and ideas. Use GitHub Issues for reproducible bugs. See [SUPPORT.md](../SUPPORT.md) for the support flow.
 
 Do not post Cloudflare credentials, Tunnel tokens, Minecraft/Microsoft authentication tokens, raw public player IPs, or unrelated infrastructure secrets.
