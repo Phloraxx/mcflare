@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,12 +24,14 @@ import java.util.function.Consumer;
 /** Minimal HTTP/WebSocket gateway: one MCflare stream maps to one Minecraft TCP stream. */
 public final class McflareGateway implements Closeable {
     private static final int DEFAULT_MAX_CONNECTIONS = 256;
+    private static final int DEFAULT_PRE_BACKEND_TIMEOUT_MS = 10_000;
 
     private final InetSocketAddress listen;
     private final InetSocketAddress minecraft;
     private final Semaphore connectionSlots;
     private final Set<Socket> activeClients = ConcurrentHashMap.newKeySet();
     private final int maxConnections;
+    private final int preBackendTimeoutMs;
     private final boolean proxyProtocol;
     private final Consumer<String> infoLog;
     private final Consumer<String> errorLog;
@@ -37,12 +40,13 @@ public final class McflareGateway implements Closeable {
     private volatile ServerSocket listener;
 
     private McflareGateway(InetSocketAddress listen, InetSocketAddress minecraft,
-                           int maxConnections, boolean proxyProtocol,
+                           int maxConnections, boolean proxyProtocol, int preBackendTimeoutMs,
                            Consumer<String> infoLog, Consumer<String> errorLog) {
         this.listen = listen;
         this.minecraft = minecraft;
         this.connectionSlots = new Semaphore(maxConnections);
         this.maxConnections = maxConnections;
+        this.preBackendTimeoutMs = preBackendTimeoutMs;
         this.proxyProtocol = proxyProtocol;
         this.infoLog = infoLog;
         this.errorLog = errorLog;
@@ -52,10 +56,10 @@ public final class McflareGateway implements Closeable {
         InetSocketAddress listen = parseAddress(args.length > 0 ? args[0] : "127.0.0.1:25577");
         InetSocketAddress minecraft = parseAddress(args.length > 1 ? args[1] : "127.0.0.1:25565");
         int maxConnections = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_MAX_CONNECTIONS;
-        boolean proxyProtocol = args.length > 3 && Boolean.parseBoolean(args[3]);
+        boolean proxyProtocol = args.length > 3 && parseBoolean("proxy protocol", args[3]);
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
         McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
-                System.out::println, System.err::println);
+                DEFAULT_PRE_BACKEND_TIMEOUT_MS, System.out::println, System.err::println);
         gateway.bindListener();
         gateway.runLoop();
     }
@@ -68,22 +72,49 @@ public final class McflareGateway implements Closeable {
     public static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
                                              int maxConnections, boolean proxyProtocol,
                                              Consumer<String> infoLog, Consumer<String> errorLog) throws IOException {
+        return startAsync(listen, minecraft, maxConnections, proxyProtocol,
+                DEFAULT_PRE_BACKEND_TIMEOUT_MS, infoLog, errorLog);
+    }
+
+    static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
+                                      int maxConnections, boolean proxyProtocol, int preBackendTimeoutMs,
+                                      Consumer<String> infoLog, Consumer<String> errorLog) throws IOException {
+        if (listen == null || minecraft == null) throw new IllegalArgumentException("listen and Minecraft endpoints are required");
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
+        if (preBackendTimeoutMs < 1) throw new IllegalArgumentException("pre-backend timeout must be positive");
         if (infoLog == null || errorLog == null) throw new IllegalArgumentException("log consumers are required");
-        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol, infoLog, errorLog);
+        McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
+                preBackendTimeoutMs, infoLog, errorLog);
         gateway.bindListener();
-        Thread thread = new Thread(gateway::runLoop, "mcflare-gateway-accept");
-        thread.setDaemon(true);
-        thread.start();
-        return gateway;
+        try {
+            Thread thread = new Thread(gateway::runLoop, "mcflare-gateway-accept");
+            thread.setDaemon(true);
+            thread.start();
+            return gateway;
+        } catch (RuntimeException | Error error) {
+            gateway.close();
+            throw error;
+        }
     }
 
     private void bindListener() throws IOException {
         ServerSocket server = new ServerSocket();
-        server.bind(listen);
-        listener = server;
-        infoLog.accept("MCFLARE_GATEWAY event=listen listen=" + listen + " minecraft=" + minecraft
-                + " maxConnections=" + maxConnections + " proxyProtocol=" + proxyProtocol);
+        try {
+            server.bind(listen);
+            listener = server;
+        } catch (IOException | RuntimeException error) {
+            closeQuietly(server);
+            throw error;
+        }
+        try {
+            infoLog.accept("MCFLARE_GATEWAY event=listen listen=" + listen + " minecraft=" + minecraft
+                    + " maxConnections=" + maxConnections + " preBackendTimeoutMs=" + preBackendTimeoutMs
+                    + " proxyProtocol=" + proxyProtocol);
+        } catch (RuntimeException error) {
+            listener = null;
+            closeQuietly(server);
+            throw error;
+        }
     }
 
     private void runLoop() {
@@ -147,7 +178,16 @@ public final class McflareGateway implements Closeable {
             // connection or trip Minecraft's pre-handshake read timeout.
             stage = "pre-backend";
             byte[] firstData = new byte[64 * 1024];
-            int firstRead = webSocket.read(firstData, 0, firstData.length);
+            final int firstRead;
+            webSocket.setReadDeadline(preBackendTimeoutMs);
+            try {
+                firstRead = webSocket.read(firstData, 0, firstData.length);
+            } catch (SocketTimeoutException timeout) {
+                termination.compareAndSet("unknown", "pre-backend-timeout");
+                return;
+            } finally {
+                webSocket.setReadDeadline(0);
+            }
             if (firstRead < 0) {
                 termination.compareAndSet("unknown", "client-close-before-backend");
                 return;
@@ -221,10 +261,15 @@ public final class McflareGateway implements Closeable {
 
     private static Socket connectTcp(InetSocketAddress target) throws IOException {
         Socket socket = new Socket();
-        socket.connect(target, 3000);
-        socket.setTcpNoDelay(true);
-        socket.setKeepAlive(true);
-        return socket;
+        try {
+            socket.connect(target, 3000);
+            socket.setTcpNoDelay(true);
+            socket.setKeepAlive(true);
+            return socket;
+        } catch (IOException | RuntimeException error) {
+            closeQuietly(socket);
+            throw error;
+        }
     }
 
     private static Thread startPipeThread(InputStream input, OutputStream output, String name,
@@ -252,6 +297,13 @@ public final class McflareGateway implements Closeable {
             output.write(buffer, 0, read);
             output.flush();
         }
+    }
+
+    static boolean parseBoolean(String name, String value) {
+        String normalized = value == null ? "" : value.trim();
+        if ("true".equalsIgnoreCase(normalized)) return true;
+        if ("false".equalsIgnoreCase(normalized)) return false;
+        throw new IllegalArgumentException(name + " must be true or false");
     }
 
     private static InetSocketAddress parseAddress(String value) {

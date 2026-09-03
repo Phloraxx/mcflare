@@ -35,7 +35,7 @@ Implemented/proven on the shared Fabric/NeoForge adapter (runtime-tested on both
 - optional HAProxy PROXY v1 emission;
 - opaque nonzero ingress source-port value because Cloudflare does not expose the original player TCP source port;
 - bounded in-project standard PROXY-v1 TCP4/TCP6 parser; no separate Netty HAProxy codec dependency;
-- loopback-only PROXY detector/parser on Fabric and NeoForge servers;
+- PROXY detector/parser on Fabric and NeoForge servers that trusts loopback plus only the exact verified local `server-ip` bind while the integrated gateway is active;
 - apply parsed source address to Minecraft `Connection.address`;
 - gateway metadata logs indicate presence, not raw visitor IP.
 

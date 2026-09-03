@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -17,10 +18,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Version/loader-independent zero-config route selection. */
 public final class RouteResolver implements Closeable {
-    private static final long NEGATIVE_TTL_MS = 30L * 1000L;
+    private static final long NEGATIVE_TTL_NANOS = TimeUnit.SECONDS.toNanos(30L);
     private static final int DIRECT_CONNECT_TIMEOUT_MS = 1200;
     private static final int SECURE_PREFERENCE_GRACE_MS = 1500;
     private static final int DISCOVERY_TIMEOUT_MS = 4500;
+    private static final int NEGATIVE_CACHE_MAX_ENTRIES = 512;
+    private static final int NEGATIVE_CACHE_TARGET_ENTRIES = 384;
 
     private final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<String, Long>();
     private final ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory());
@@ -39,13 +42,14 @@ public final class RouteResolver implements Closeable {
                                    InetSocketAddress resolvedAddress,
                                    LoopbackCarrier.ErrorHandler errorHandler) {
         final String host = normalizeHost(logicalHost);
+        if (logicalPort < 1 || logicalPort > 65535) throw new IllegalArgumentException("logicalPort");
         if (!isProbeCandidate(host)) return null;
         final String key = host + ":" + logicalPort;
         if (knownRoutes.contains(key)) return carrierFrom(openRequired(host), host, errorHandler);
-        final long now = System.currentTimeMillis();
+        final long now = System.nanoTime();
         Long negativeUntil = negativeCache.get(key);
         if (negativeUntil != null) {
-            if (negativeUntil > now) return null;
+            if (negativeUntil - now > 0L) return null;
             negativeCache.remove(key, negativeUntil);
         }
 
@@ -53,41 +57,61 @@ public final class RouteResolver implements Closeable {
                 () -> tryOpen(host), executor);
         CompletableFuture<Boolean> direct = CompletableFuture.supplyAsync(
                 () -> directTcpReachable(resolvedAddress), executor);
+        final long discoveryDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(DISCOVERY_TIMEOUT_MS);
 
         try {
-            CompletableFuture.anyOf(secure, direct).get(DISCOVERY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-
-            // Secure success is decisive and wins immediately, even if direct probing is unfinished.
-            if (secure.isDone()) {
-                Rfc6455Client prepared = secure.getNow(null);
-                if (prepared != null) {
-                    direct.cancel(true);
-                    return rememberAndCarrier(prepared, key, host, errorHandler);
-                }
-            }
-
-            if (direct.isDone()) {
-                boolean directReachable = Boolean.TRUE.equals(direct.getNow(Boolean.FALSE));
-                long secureWait = directReachable ? SECURE_PREFERENCE_GRACE_MS : DISCOVERY_TIMEOUT_MS;
-                Rfc6455Client prepared = await(secure, secureWait);
-                if (prepared != null) {
-                    return rememberAndCarrier(prepared, key, host, errorHandler);
-                }
-            }
+            CompletableFuture.anyOf(secure, direct).get(remainingMillis(discoveryDeadline), TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-        } catch (Exception ignored) {
-            Rfc6455Client prepared = await(secure, DISCOVERY_TIMEOUT_MS);
+            closeLateResult(secure);
+            direct.cancel(true);
+            return null;
+        } catch (TimeoutException | ExecutionException ignored) {
+            // Inspect whichever probe completed by the shared deadline below.
+        }
+
+        // Secure success is decisive and wins immediately, even if direct probing is unfinished.
+        if (secure.isDone()) {
+            Rfc6455Client prepared = secure.getNow(null);
             if (prepared != null) {
+                direct.cancel(true);
+                return rememberAndCarrier(prepared, key, host, errorHandler);
+            }
+        }
+
+        if (direct.isDone()) {
+            boolean directReachable = Boolean.TRUE.equals(direct.getNow(Boolean.FALSE));
+            long remaining = remainingMillis(discoveryDeadline);
+            long secureWait = directReachable ? Math.min(SECURE_PREFERENCE_GRACE_MS, remaining) : remaining;
+            Rfc6455Client prepared = await(secure, secureWait);
+            if (prepared != null) {
+                direct.cancel(true);
                 return rememberAndCarrier(prepared, key, host, errorHandler);
             }
         }
 
         closeLateResult(secure);
         direct.cancel(true);
-        if (Thread.currentThread().isInterrupted()) return null;
-        negativeCache.put(key, now + NEGATIVE_TTL_MS);
+        rememberNegative(key, now);
         return null;
+    }
+
+    private void rememberNegative(String key, long now) {
+        negativeCache.put(key, now + NEGATIVE_TTL_NANOS);
+        if (negativeCache.size() <= NEGATIVE_CACHE_MAX_ENTRIES) return;
+
+        for (String candidate : negativeCache.keySet()) {
+            Long until = negativeCache.get(candidate);
+            if (until != null && until - now <= 0L) negativeCache.remove(candidate, until);
+        }
+        if (negativeCache.size() <= NEGATIVE_CACHE_MAX_ENTRIES) return;
+
+        int toRemove = negativeCache.size() - NEGATIVE_CACHE_TARGET_ENTRIES;
+        for (String candidate : negativeCache.keySet()) {
+            if (toRemove <= 0) break;
+            if (key.equals(candidate)) continue;
+            if (negativeCache.remove(candidate) != null) toRemove--;
+        }
     }
 
     private LoopbackCarrier rememberAndCarrier(Rfc6455Client webSocket, String key, String host,
@@ -138,6 +162,12 @@ public final class RouteResolver implements Closeable {
         } catch (IOException | RuntimeException ignored) {
             return null;
         }
+    }
+
+    private static long remainingMillis(long deadlineNanos) {
+        long remaining = deadlineNanos - System.nanoTime();
+        if (remaining <= 0L) return 1L;
+        return Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining));
     }
 
     private static Rfc6455Client await(CompletableFuture<Rfc6455Client> future, long timeoutMs) {

@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -14,6 +17,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Minimal RFC 6455 server-side byte stream used by the Enhanced gateway. */
 final class WebSocketServerConnection implements Closeable {
@@ -31,6 +35,7 @@ final class WebSocketServerConnection implements Closeable {
     private int currentOffset;
     private boolean fragmented;
     private volatile boolean closed;
+    private volatile long readDeadlineNanos;
 
     private WebSocketServerConnection(Socket socket, Map<String, String> headers)
             throws IOException {
@@ -42,10 +47,15 @@ final class WebSocketServerConnection implements Closeable {
 
     static WebSocketServerConnection accept(Socket socket, String requiredPath, String requiredSubprotocol)
             throws IOException {
+        return accept(socket, requiredPath, requiredSubprotocol, HANDSHAKE_TIMEOUT_MS);
+    }
+
+    static WebSocketServerConnection accept(Socket socket, String requiredPath, String requiredSubprotocol,
+                                             int handshakeTimeoutMs) throws IOException {
+        if (handshakeTimeoutMs < 1) throw new IllegalArgumentException("handshakeTimeoutMs");
         socket.setTcpNoDelay(true);
         socket.setKeepAlive(true);
-        socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
-        UpgradeRequest request = readUpgrade(socket.getInputStream());
+        UpgradeRequest request = readUpgrade(socket, handshakeTimeoutMs);
         if (!requiredPath.equals(request.path)) {
             writeHttpError(socket.getOutputStream(), 404, "Not found");
             throw new IOException("unexpected WebSocket path");
@@ -63,7 +73,19 @@ final class WebSocketServerConnection implements Closeable {
     String header(String name) {
         return headers.get(name.toLowerCase(Locale.ROOT));
     }
+
+    void setReadDeadline(int timeoutMs) throws java.net.SocketException {
+        if (timeoutMs < 0) throw new IllegalArgumentException("timeoutMs");
+        if (timeoutMs == 0) {
+            readDeadlineNanos = 0L;
+            socket.setSoTimeout(0);
+            return;
+        }
+        readDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+    }
+
     int read(byte[] target, int offset, int length) throws IOException {
+        validateSlice(target, offset, length);
         if (length == 0) return 0;
         while (currentOffset >= current.length) {
             current = readNextDataFrame();
@@ -74,6 +96,10 @@ final class WebSocketServerConnection implements Closeable {
         int count = Math.min(length, current.length - currentOffset);
         System.arraycopy(current, currentOffset, target, offset, count);
         currentOffset += count;
+        if (currentOffset >= current.length) {
+            current = new byte[0];
+            currentOffset = 0;
+        }
         return count;
     }
 
@@ -92,6 +118,8 @@ final class WebSocketServerConnection implements Closeable {
         write(data, 0, data.length);
     }
     void write(byte[] data, int offset, int length) throws IOException {
+        validateSlice(data, offset, length);
+        if (length > MAX_FRAME) throw new IllegalArgumentException("WebSocket frame too large: " + length);
         synchronized (writeLock) {
             if (closed) throw new EOFException("WebSocket closed");
             output.write(0x82);
@@ -113,10 +141,17 @@ final class WebSocketServerConnection implements Closeable {
         }
     }
 
+    private static void validateSlice(byte[] data, int offset, int length) {
+        if (data == null) throw new NullPointerException("data");
+        if (offset < 0 || length < 0 || offset > data.length - length) {
+            throw new IndexOutOfBoundsException("invalid WebSocket buffer slice");
+        }
+    }
+
     private byte[] readNextDataFrame() throws IOException {
         while (!closed) {
-            int first = input.read();
-            int second = input.read();
+            int first = readRawByte();
+            int second = readRawByte();
             if (first < 0 || second < 0) throw new EOFException("WebSocket EOF");
             if ((first & 0x70) != 0) throw new IOException("unsupported RSV bits");
             boolean fin = (first & 0x80) != 0;
@@ -124,10 +159,17 @@ final class WebSocketServerConnection implements Closeable {
             boolean masked = (second & 0x80) != 0;
             if (!masked) throw new IOException("client WebSocket frame must be masked");
 
-            long length = second & 0x7F;
-            if (length == 126) length = readUnsigned(2);
-            else if (length == 127) length = readUnsigned(8);
-            if (length < 0 || length > MAX_FRAME || length > Integer.MAX_VALUE) {
+            int lengthCode = second & 0x7F;
+            long length = lengthCode;
+            if (lengthCode == 126) {
+                length = readUnsigned(2);
+                if (length < 126) throw new IOException("non-minimal WebSocket frame length");
+            } else if (lengthCode == 127) {
+                length = readUnsigned(8);
+                if (length < 0) throw new IOException("invalid WebSocket 64-bit frame length");
+                if (length <= 0xFFFFL) throw new IOException("non-minimal WebSocket frame length");
+            }
+            if (length > MAX_FRAME || length > Integer.MAX_VALUE) {
                 throw new IOException("WebSocket frame too large: " + length);
             }
             if (opcode >= 0x8 && (!fin || length > 125)) {
@@ -139,6 +181,7 @@ final class WebSocketServerConnection implements Closeable {
             for (int i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
 
             if (opcode == 0x8) {
+                validateClosePayload(payload);
                 try {
                     writeControl(0x8, payload);
                 } finally {
@@ -166,6 +209,28 @@ final class WebSocketServerConnection implements Closeable {
         return null;
     }
 
+    private static void validateClosePayload(byte[] payload) throws IOException {
+        if (payload.length == 1) throw new IOException("invalid WebSocket close payload length");
+        if (payload.length < 2) return;
+        int code = ((payload[0] & 0xFF) << 8) | (payload[1] & 0xFF);
+        boolean standardCode = code >= 1000 && code <= 1014
+                && code != 1004 && code != 1005 && code != 1006;
+        boolean applicationCode = code >= 3000 && code < 5000;
+        if (!standardCode && !applicationCode) {
+            throw new IOException("invalid WebSocket close code: " + code);
+        }
+        if (payload.length > 2) {
+            try {
+                StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(payload, 2, payload.length - 2));
+            } catch (java.nio.charset.CharacterCodingException error) {
+                throw new IOException("invalid UTF-8 in WebSocket close reason", error);
+            }
+        }
+    }
+
     private void writeControl(int opcode, byte[] payload) throws IOException {
         synchronized (writeLock) {
             if (closed) throw new EOFException("WebSocket closed");
@@ -179,7 +244,7 @@ final class WebSocketServerConnection implements Closeable {
     private long readUnsigned(int bytes) throws IOException {
         long value = 0L;
         for (int i = 0; i < bytes; i++) {
-            int b = input.read();
+            int b = readRawByte();
             if (b < 0) throw new EOFException("WebSocket EOF");
             value = (value << 8) | (b & 0xFFL);
         }
@@ -189,6 +254,7 @@ final class WebSocketServerConnection implements Closeable {
         byte[] result = new byte[length];
         int offset = 0;
         while (offset < length) {
+            applyReadDeadline();
             int read = input.read(result, offset, length - offset);
             if (read < 0) throw new EOFException("WebSocket EOF");
             offset += read;
@@ -196,12 +262,27 @@ final class WebSocketServerConnection implements Closeable {
         return result;
     }
 
+    private int readRawByte() throws IOException {
+        applyReadDeadline();
+        return input.read();
+    }
+
+    private void applyReadDeadline() throws IOException {
+        long deadline = readDeadlineNanos;
+        if (deadline == 0L) return;
+        long remaining = deadline - System.nanoTime();
+        if (remaining <= 0L) throw new SocketTimeoutException("WebSocket read deadline exceeded");
+        long millis = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining));
+        socket.setSoTimeout((int) Math.min(Integer.MAX_VALUE, millis));
+    }
+
     private static void validateUpgrade(Map<String, String> headers) throws IOException {
         String key = headers.get("sec-websocket-key");
         String upgrade = headers.get("upgrade");
         String connection = headers.get("connection");
         String version = headers.get("sec-websocket-version");
-        if (key == null || !"websocket".equalsIgnoreCase(upgrade)
+        String host = headers.get("host");
+        if (host == null || host.trim().isEmpty() || key == null || !"websocket".equalsIgnoreCase(upgrade)
                 || !containsToken(connection, "upgrade") || !"13".equals(version)) {
             throw new IOException("invalid WebSocket upgrade");
         }
@@ -232,11 +313,13 @@ final class WebSocketServerConnection implements Closeable {
         return false;
     }
 
-    private static UpgradeRequest readUpgrade(InputStream input) throws IOException {
+    private static UpgradeRequest readUpgrade(Socket socket, int timeoutMs) throws IOException {
+        InputStream input = socket.getInputStream();
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         int matched = 0;
         while (bytes.size() < MAX_HEADERS) {
-            int b = input.read();
+            int b = readBeforeDeadline(socket, input, deadlineNanos);
             if (b < 0) throw new EOFException("HTTP EOF");
             bytes.write(b);
             char expected = "\r\n\r\n".charAt(matched);
@@ -253,19 +336,57 @@ final class WebSocketServerConnection implements Closeable {
         String[] lines = raw.split("\\r\\n");
         if (lines.length == 0) throw new IOException("missing HTTP request line");
         String[] requestLine = lines[0].split(" ", 3);
-        if (requestLine.length != 3 || !"GET".equals(requestLine[0])) {
-            throw new IOException("expected HTTP GET");
+        if (requestLine.length != 3 || !"GET".equals(requestLine[0]) || !"HTTP/1.1".equals(requestLine[2])) {
+            throw new IOException("expected HTTP/1.1 GET");
         }
 
         Map<String, String> headers = new LinkedHashMap<String, String>();
         for (int i = 1; i < lines.length; i++) {
+            if (lines[i].isEmpty()) continue;
             int colon = lines[i].indexOf(':');
-            if (colon <= 0) continue;
-            headers.put(lines[i].substring(0, colon).trim().toLowerCase(Locale.ROOT),
-                    lines[i].substring(colon + 1).trim());
+            if (colon <= 0) throw new IOException("malformed HTTP header");
+            String rawName = lines[i].substring(0, colon);
+            if (!rawName.equals(rawName.trim()) || !isHttpToken(rawName)) {
+                throw new IOException("malformed HTTP header");
+            }
+            String name = rawName.toLowerCase(Locale.ROOT);
+            String value = lines[i].substring(colon + 1).trim();
+            String previous = headers.get(name);
+            if (previous == null) {
+                headers.put(name, value);
+            } else if ("connection".equals(name) || "upgrade".equals(name)) {
+                headers.put(name, previous + "," + value);
+            } else {
+                throw new IOException("duplicate HTTP header: " + name);
+            }
         }
         return new UpgradeRequest(requestLine[1], headers);
     }
+    private static boolean isHttpToken(String value) {
+        if (value == null || value.isEmpty()) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) continue;
+            switch (c) {
+                case '!': case '#': case '$': case '%': case '&': case '\'': case '*': case '+':
+                case '-': case '.': case '^': case '_': case '`': case '|': case '~':
+                    continue;
+                default:
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    private static int readBeforeDeadline(Socket socket, InputStream input, long deadlineNanos)
+            throws IOException {
+        long remaining = deadlineNanos - System.nanoTime();
+        if (remaining <= 0L) throw new SocketTimeoutException("WebSocket handshake deadline exceeded");
+        long millis = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining));
+        socket.setSoTimeout((int) Math.min(Integer.MAX_VALUE, millis));
+        return input.read();
+    }
+
     private static void writeUpgrade(OutputStream output, String key, String subprotocol) throws IOException {
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");

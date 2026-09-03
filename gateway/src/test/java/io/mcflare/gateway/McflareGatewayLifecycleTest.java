@@ -1,6 +1,8 @@
 package io.mcflare.gateway;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -22,6 +24,25 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class McflareGatewayLifecycleTest {
+    @Test
+    void standaloneBooleanParsingRejectsTypos() {
+        assertTrue(McflareGateway.parseBoolean("proxy protocol", " true "));
+        assertFalse(McflareGateway.parseBoolean("proxy protocol", "FALSE"));
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.parseBoolean("proxy protocol", "treu"));
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.parseBoolean("proxy protocol", null));
+    }
+
+    @Test
+    void startRejectsMissingEndpointsBeforeBinding() {
+        InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 25565);
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.startAsync(null, endpoint, 1, false));
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.startAsync(endpoint, null, 1, false));
+    }
+
     @Test
     void backendEofClosesWebSocketAndReleasesConnectionSlot() throws Exception {
         ServerSocket backendListener = new ServerSocket();
@@ -61,6 +82,25 @@ class McflareGatewayLifecycleTest {
             gateway.close();
             backendListener.close();
             backendExecutor.shutdownNow();
+        }
+    }
+
+    @Test
+    void idleUpgradeTimesOutAndReleasesConnectionSlot() throws Exception {
+        int gatewayPort = freePort();
+        McflareGateway gateway = McflareGateway.startAsync(
+                new InetSocketAddress("127.0.0.1", gatewayPort),
+                new InetSocketAddress("127.0.0.1", freePort()),
+                1, false, 150, ignored -> { }, ignored -> { });
+        try {
+            try (Socket first = openWebSocket(gatewayPort)) {
+                assertPeerClosesPromptly(first);
+            }
+            try (Socket second = openWebSocketEventually(gatewayPort)) {
+                // A second upgrade succeeding proves the timed-out first session released the only slot.
+            }
+        } finally {
+            gateway.close();
         }
     }
 
@@ -121,8 +161,28 @@ class McflareGatewayLifecycleTest {
         output.write(request.getBytes(StandardCharsets.US_ASCII));
         output.flush();
         String response = readHeaders(socket.getInputStream());
-        assertTrue(response.startsWith("HTTP/1.1 101"), response);
+        if (!response.startsWith("HTTP/1.1 101")) {
+            socket.close();
+            fail(response);
+        }
         return socket;
+    }
+
+    private static Socket openWebSocketEventually(int port) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        AssertionError lastBusy = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                return openWebSocket(port);
+            } catch (AssertionError error) {
+                if (error.getMessage() == null || !error.getMessage().contains("503 Service Unavailable")) {
+                    throw error;
+                }
+                lastBusy = error;
+                Thread.sleep(10L);
+            }
+        }
+        throw lastBusy == null ? new AssertionError("gateway slot was not released") : lastBusy;
     }
 
     private static String readHeaders(InputStream input) throws IOException {

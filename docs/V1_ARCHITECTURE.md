@@ -129,7 +129,7 @@ Generic hostname routing belongs to Traefik/Caddy/NGINX/cloudflared, not the gat
 
 #### Fabric / Quilt / NeoForge
 
-The supported server-side mod starts the local gateway and adds a minimal trusted-local PROXY-v1 detector to Minecraft's connection pipeline when real-IP restoration is enabled.
+The supported server-side mod starts the local gateway and adds a minimal trusted-source PROXY-v1 detector to Minecraft's connection pipeline when real-IP restoration is enabled. It trusts loopback, plus only the exact verified local `server-ip` address when Minecraft is explicitly bound to one.
 
 Fabric and NeoForge compile the same root Minecraft adapter source. Quilt uses the Fabric artifact.
 
@@ -182,7 +182,7 @@ See [REAL_IP.md](REAL_IP.md).
 - WSS protects the player-to-Cloudflare WebSocket transport.
 - Minecraft's own protocol encryption/authentication remains inside the carried byte stream.
 - Cloudflare visitor headers are trusted only on controlled ingress.
-- Fabric/Quilt/NeoForge PROXY metadata is trusted only from the intended local gateway boundary by default.
+- Fabric/Quilt/NeoForge PROXY metadata is trusted from loopback, plus only an exact verified local `server-ip` address while the integrated gateway is active.
 - a PROXY-enabled Paper/Purpur backend should be private/firewalled.
 - browser-interactive Access/Managed Challenge flows do not belong in front of `/mcflare`.
 - MCflare stores no Cloudflare API keys, Tunnel tokens, Tunnel IDs, or DNS credentials.

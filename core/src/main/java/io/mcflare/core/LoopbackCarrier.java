@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Bridges one Minecraft TCP connection to one already-open MCflare WebSocket. */
 public final class LoopbackCarrier implements Closeable {
     private static final long HEARTBEAT_INTERVAL_MS = 30_000L;
+    private static final int HEARTBEAT_READ_TIMEOUT_MS = 90_000;
+    private static final int LOCAL_ACCEPT_TIMEOUT_MS = 10_000;
 
     public interface ErrorHandler { void onError(Throwable error); }
 
@@ -28,12 +30,29 @@ public final class LoopbackCarrier implements Closeable {
     }
 
     public static LoopbackCarrier start(Rfc6455Client webSocket, ErrorHandler errorHandler) throws IOException {
+        return start(webSocket, errorHandler, LOCAL_ACCEPT_TIMEOUT_MS);
+    }
+
+    static LoopbackCarrier start(Rfc6455Client webSocket, ErrorHandler errorHandler, int acceptTimeoutMs)
+            throws IOException {
         if (webSocket == null) throw new IllegalArgumentException("webSocket");
+        if (acceptTimeoutMs < 1) throw new IllegalArgumentException("acceptTimeoutMs");
         ServerSocket listener = new ServerSocket();
-        listener.bind(new InetSocketAddress("127.0.0.1", 0));
+        try {
+            listener.bind(new InetSocketAddress("127.0.0.1", 0));
+            listener.setSoTimeout(acceptTimeoutMs);
+        } catch (IOException | RuntimeException error) {
+            closeQuietly(listener);
+            throw error;
+        }
         LoopbackCarrier carrier = new LoopbackCarrier(listener, webSocket, errorHandler);
-        carrier.startDaemon("mcflare-accept", carrier::acceptOnce);
-        return carrier;
+        try {
+            carrier.startDaemon("mcflare-accept", carrier::acceptOnce);
+            return carrier;
+        } catch (RuntimeException | Error error) {
+            carrier.close();
+            throw error;
+        }
     }
 
     public InetSocketAddress getLocalAddress() {
@@ -48,13 +67,16 @@ public final class LoopbackCarrier implements Closeable {
             local.setKeepAlive(true);
             bridge(local);
         } catch (IOException e) {
-            if (!closed.get()) report(e);
+            boolean shouldReport = !closed.get();
+            close();
+            if (shouldReport) report(e);
         } finally {
             close();
         }
     }
 
     private void bridge(final Socket socket) throws IOException {
+        webSocket.setReadTimeout(HEARTBEAT_READ_TIMEOUT_MS);
         final AtomicBoolean sessionClosing = new AtomicBoolean(false);
         final OutputStream localOut = socket.getOutputStream();
 
@@ -81,6 +103,7 @@ public final class LoopbackCarrier implements Closeable {
                 while (!closed.get() && (payload = webSocket.readData()) != null) {
                     localOut.write(payload);
                     localOut.flush();
+                    payload = null;
                 }
             } catch (IOException e) {
                 if (!closed.get() && sessionClosing.compareAndSet(false, true)) report(e);

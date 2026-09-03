@@ -1,5 +1,6 @@
 package io.mcflare.server;
 
+import io.mcflare.gateway.ProxyProtocolSourceTrust;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
@@ -20,7 +21,7 @@ public final class ProxyProtocolChannelInitializer extends ChannelInitializer<Ch
         channel.pipeline().addLast("mcflare-vanilla-initializer", vanilla);
         if (!(channel.remoteAddress() instanceof InetSocketAddress)) return;
         InetSocketAddress remote = (InetSocketAddress) channel.remoteAddress();
-        if (remote.getAddress() == null || !remote.getAddress().isLoopbackAddress()) return;
+        if (remote.getAddress() == null || !ProxyProtocolSourceTrust.isTrusted(remote.getAddress())) return;
         if (channel.pipeline().get("timeout") != null) {
             channel.pipeline().addAfter("timeout", "mcflare-proxy-detector", new ProxyProtocolDetector());
         } else {

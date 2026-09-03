@@ -9,6 +9,11 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 - Close active client sessions when the shared gateway is stopped, so plugin/server shutdown cannot leave old gateway threads and backend streams alive.
 - Prevent a carrier from being attached after its Minecraft `Connection` has already begun disconnecting.
 - Preserve thread interruption during route discovery instead of turning an interrupted probe into an ordinary negative-cache result.
+- Bound WebSocket upgrade, pre-backend, local-carrier attachment, and route-discovery lifetimes so stalled peers cannot extend connection state indefinitely.
+- Reject ambiguous or malformed WebSocket handshakes, Close payloads, non-minimal frame lengths, invalid buffer slices, and oversized route/frame state before unsafe I/O or allocation.
+- Harden positive secure-route pins with strict validation, owner-only POSIX permissions, locked cross-process reads/appends, monotonic negative-cache expiry, and fail-closed handling for corrupt or inaccessible stores.
+- Preserve PROXY-v1 real-IP restoration when Minecraft is explicitly bound to a verified local interface, without broadening trust beyond loopback plus that exact active backend address.
+- Reject invalid standalone gateway startup values instead of silently interpreting malformed booleans as disabled features.
 
 ### Changed
 

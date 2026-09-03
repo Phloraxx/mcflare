@@ -27,7 +27,7 @@ Shared adapter responsibilities are limited to:
 - intercepting Minecraft status/join connection establishment;
 - using the loader-independent `RouteResolver` and loopback carrier;
 - starting/stopping the local gateway on a dedicated server;
-- inserting the optional loopback-trusted PROXY-v1 detector into Minecraft's Netty listener.
+- inserting the optional local-source-trusted PROXY-v1 detector into Minecraft's Netty listener (loopback, plus an exact verified local `server-ip` bind when required).
 
 The RFC6455 transport and gateway remain in `core/` and `gateway/` and are not copied per loader.
 

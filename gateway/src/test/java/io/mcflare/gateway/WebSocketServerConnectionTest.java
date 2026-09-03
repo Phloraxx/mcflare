@@ -44,6 +44,31 @@ class WebSocketServerConnectionTest {
         }
     }
 
+    @Test void invalidWriteSliceFailsBeforeEmittingFrameBytes() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            client.setSoTimeout(150);
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+
+            assertThrows(IndexOutOfBoundsException.class, () -> ws.write(new byte[] {1}, 0, 2));
+            assertThrows(java.net.SocketTimeoutException.class, () -> client.getInputStream().read());
+            ws.close(); client.close();
+        }
+    }
+
+    @Test void invalidReadSliceFailsBeforeConsumingFrameBytes() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            client.getOutputStream().write(maskedFrame(0x2, true, new byte[] {'x'}));
+            client.getOutputStream().flush();
+
+            assertThrows(IndexOutOfBoundsException.class, () -> ws.read(new byte[1], 2, 0));
+            assertArrayEquals(new byte[] {'x'}, ws.readExact(1));
+            ws.close(); client.close();
+        }
+    }
+
     @Test void unmaskedClientFrameIsRejected() throws Exception {
         try (Harness h = new Harness()) {
             Socket client = h.connect("/mcflare", "mcflare.v1", "");
@@ -114,6 +139,177 @@ class WebSocketServerConnectionTest {
                     readExact(client.getInputStream(), 4));
             assertEquals(-1, client.getInputStream().read());
             client.close();
+        }
+    }
+
+    @Test void malformedClosePayloadsAreRejected() throws Exception {
+        assertCloseRejected(new byte[] {0x03});
+        assertCloseRejected(new byte[] {0x03, (byte) 0xED});
+        assertCloseRejected(new byte[] {0x07, (byte) 0xD0});
+        assertCloseRejected(new byte[] {0x03, (byte) 0xE8, (byte) 0xC3, 0x28});
+    }
+
+    @Test void nonMinimalExtendedLengthIsRejectedBeforePayloadRead() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            client.getOutputStream().write(new byte[] {(byte) 0x82, (byte) 0xFE, 0, 1});
+            client.getOutputStream().flush();
+            IOException error = assertThrows(IOException.class, () -> ws.readExact(1));
+            assertTrue(error.getMessage().contains("non-minimal"));
+            ws.close(); client.close();
+        }
+    }
+
+    @Test void absoluteReadDeadlineIsNotExtendedByPingFrames() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            ws.setReadDeadline(180);
+            CompletableFuture<Throwable> result = new CompletableFuture<Throwable>();
+            Thread reader = new Thread(() -> {
+                try { ws.readExact(1); result.complete(null); }
+                catch (Throwable error) { result.complete(error); }
+            });
+            reader.setDaemon(true);
+            reader.start();
+            for (int i = 0; i < 4; i++) {
+                Thread.sleep(40L);
+                client.getOutputStream().write(maskedFrame(0x9, true, new byte[] {(byte) i}));
+                client.getOutputStream().flush();
+            }
+            Throwable error = result.get(250, TimeUnit.MILLISECONDS);
+            assertTrue(error instanceof java.net.SocketTimeoutException, String.valueOf(error));
+            ws.setReadDeadline(0);
+            ws.close(); client.close();
+        }
+    }
+
+    @Test void handshakeUsesAbsoluteDeadlineDespiteSlowDripTraffic() throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<Throwable> result = new CompletableFuture<Throwable>();
+            Thread acceptor = new Thread(() -> {
+                try (Socket socket = server.accept()) {
+                    WebSocketServerConnection.accept(socket, "/mcflare", "mcflare.v1", 150);
+                    result.complete(null);
+                } catch (Throwable error) { result.complete(error); }
+            });
+            acceptor.setDaemon(true);
+            acceptor.start();
+            try (Socket client = new Socket("127.0.0.1", server.getLocalPort())) {
+                for (byte value : "GET /mcflare HTTP/1.1\r\n".getBytes(StandardCharsets.US_ASCII)) {
+                    try {
+                        client.getOutputStream().write(value);
+                        client.getOutputStream().flush();
+                    } catch (IOException closed) {
+                        break;
+                    }
+                    Thread.sleep(30L);
+                    if (result.isDone()) break;
+                }
+            }
+            Throwable error = result.get(300, TimeUnit.MILLISECONDS);
+            assertTrue(error instanceof java.net.SocketTimeoutException, String.valueOf(error));
+        }
+    }
+
+    @Test void duplicateSingletonRequestHeadersAreRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String request = "GET /mcflare HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n"
+                + "Sec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        assertRawUpgradeRejected(request);
+    }
+
+    @Test void duplicateForwardingIdentityHeaderIsRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String request = "GET /mcflare HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n"
+                + "Sec-WebSocket-Protocol: mcflare.v1\r\n"
+                + "CF-Connecting-IP: 198.51.100.1\r\n"
+                + "CF-Connecting-IP: 198.51.100.2\r\n\r\n";
+        assertRawUpgradeRejected(request);
+    }
+
+    @Test void malformedHeaderNameAndObsFoldAreRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String common = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key
+                + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        assertRawUpgradeRejected("GET /mcflare HTTP/1.1\r\nHost : localhost\r\n" + common);
+        assertRawUpgradeRejected("GET /mcflare HTTP/1.1\r\nHost: localhost\r\n folded\r\n" + common);
+    }
+
+    @Test void repeatedConnectionHeadersMaySupplyUpgradeToken() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String request = "GET /mcflare HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: keep-alive\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n"
+                + "Sec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<WebSocketServerConnection> result = new CompletableFuture<WebSocketServerConnection>();
+            Thread t = new Thread(() -> {
+                try { result.complete(WebSocketServerConnection.accept(server.accept(), "/mcflare", "mcflare.v1")); }
+                catch (Throwable error) { result.completeExceptionally(error); }
+            });
+            t.setDaemon(true);
+            t.start();
+            try (Socket client = new Socket("127.0.0.1", server.getLocalPort())) {
+                client.getOutputStream().write(request.getBytes(StandardCharsets.ISO_8859_1));
+                client.getOutputStream().flush();
+                WebSocketServerConnection ws = result.get(2, TimeUnit.SECONDS);
+                ws.close();
+            }
+        }
+    }
+
+    @Test void http10AndMissingHostAreRejected() throws Exception {
+        String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
+        String common = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key
+                + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: mcflare.v1\r\n\r\n";
+        assertRawUpgradeRejected("GET /mcflare HTTP/1.0\r\nHost: localhost\r\n" + common);
+        assertRawUpgradeRejected("GET /mcflare HTTP/1.1\r\n" + common);
+    }
+
+    private static void assertCloseRejected(byte[] payload) throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            client.getOutputStream().write(maskedFrame(0x8, true, payload));
+            client.getOutputStream().flush();
+            assertThrows(IOException.class, () -> ws.readExact(1));
+            ws.close(); client.close();
+        }
+    }
+
+    private static void assertRawUpgradeRejected(String request) throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<Throwable> result = new CompletableFuture<Throwable>();
+            Thread t = new Thread(() -> {
+                try (Socket socket = server.accept()) {
+                    WebSocketServerConnection.accept(socket, "/mcflare", "mcflare.v1");
+                    result.complete(null);
+                } catch (Throwable error) { result.complete(error); }
+            });
+            t.setDaemon(true);
+            t.start();
+            try (Socket client = new Socket("127.0.0.1", server.getLocalPort())) {
+                client.getOutputStream().write(request.getBytes(StandardCharsets.ISO_8859_1));
+                client.getOutputStream().flush();
+            }
+            assertTrue(result.get(2, TimeUnit.SECONDS) instanceof IOException);
         }
     }
 
