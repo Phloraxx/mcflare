@@ -46,6 +46,7 @@
 | Real Fabric 26.1 client Quick Play -> true Orange `/mcflare` -> world join | PASS |
 | Real Fabric 26.1 client Quick Play -> named Tunnel `/mcflare` -> world join | PASS |
 | Published `v1.0.0-rc.1` Fabric 26.2 client -> Mojang `online-mode=true` authentication + world join, true Orange + named Tunnel | PASS |
+| Exact `1.0.1` release-package Fabric 26.2 client -> Mojang `online-mode=true` authentication + world join, true Orange + named Tunnel | PASS |
 | Minecraft login log exposes restored `CF-Connecting-IP` (`<redacted-public-ip>`) on Orange + Tunnel | PASS |
 | Native Minecraft `ban-ip` immediately kicks restored-IP player and rejects fresh Orange reconnect | PASS |
 | Real MCflare-equipped Fabric 26.1 client -> clean ordinary server with zero MCflare mods | PASS |
@@ -75,7 +76,7 @@
 
 ## Full-client evidence
 
-The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. On 2026-09-01 the rebuilt v1 Fabric 26.1 client was then launched as the real Minecraft client under ARM64 Oracle/Xvfb/Mesa llvmpipe and Quick Play joined an isolated Fabric server through `/mcflare` on both true Orange and the named Tunnel. In both cases the server reached `joined the game` and logged the restored visitor IPv4 `<redacted-public-ip>`, matching the Oracle client host's public IPv4. This closes the rebuilt-v1 Fabric full-login and server-log IP proof for both ingress modes. On 2026-09-03, the published `v1.0.0-rc.1` Fabric client separately completed Mojang `online-mode=true` authentication and world join through both delivery modes; see `TEST_EVIDENCE_2026-09-03.md`.
+The pre-v1-path checkpoint proved Minecraft 26.2 login through true Orange and the named HTTP Tunnel on the legacy path. On 2026-09-01 the rebuilt v1 Fabric 26.1 client was then launched as the real Minecraft client under ARM64 Oracle/Xvfb/Mesa llvmpipe and Quick Play joined an isolated Fabric server through `/mcflare` on both true Orange and the named Tunnel. In both cases the server reached `joined the game` and logged the restored visitor IPv4 `<redacted-public-ip>`, matching the Oracle client host's public IPv4. This closes the rebuilt-v1 Fabric full-login and server-log IP proof for both ingress modes. On 2026-09-03, the published `v1.0.0-rc.1` Fabric client separately completed Mojang `online-mode=true` authentication and world join through both delivery modes; see `TEST_EVIDENCE_2026-09-03.md`. On 2026-09-04, the exact reproducible `1.0.1` release-package Fabric client repeated the authenticated world join through both routes after the runtime-hardening changes; see `RELEASE_EVIDENCE_1.0.1.md`.
 
 ## Optional future validation/formalization
 

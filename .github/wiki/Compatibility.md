@@ -16,6 +16,6 @@ Quilt uses the matching Fabric artifact. Paper/Purpur players still use a suppor
 
 The compatibility work includes ordinary server Status, MCflare WSS Status, full LOGIN → CONFIGURATION → GAME transport, ordinary non-MCflare regression behavior, IPv4/IPv6 real-IP handling where applicable, concurrency/lifecycle tests, and release packaging checks.
 
-A real authenticated `online-mode=true` Minecraft 26.2 client using the published `v1.0.0-rc.1` Fabric artifact has joined successfully through both Orange Cloud and a named Tunnel.
+A real authenticated `online-mode=true` Minecraft 26.2 client using the exact `1.0.1` release-package Fabric artifact has joined successfully through both Orange Cloud and a named Tunnel.
 
 For exact loader versions, runtime evidence, and packaging rationale, see [`docs/COMPATIBILITY.md`](https://github.com/Phloraxx/mcflare/blob/main/docs/COMPATIBILITY.md) and [`docs/TEST_MATRIX.md`](https://github.com/Phloraxx/mcflare/blob/main/docs/TEST_MATRIX.md).

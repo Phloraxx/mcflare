@@ -202,7 +202,7 @@ A release family should have, at minimum:
 
 The repository's exact CI properties and matrix rationale are in [BUILD_MATRIX.md](BUILD_MATRIX.md).
 
-Detailed runtime evidence is in [TEST_MATRIX.md](TEST_MATRIX.md) and [TEST_EVIDENCE_2026-09-01.md](TEST_EVIDENCE_2026-09-01.md).
+Detailed runtime evidence is in [TEST_MATRIX.md](TEST_MATRIX.md), [RELEASE_EVIDENCE_1.0.1.md](RELEASE_EVIDENCE_1.0.1.md), and [TEST_EVIDENCE_2026-09-01.md](TEST_EVIDENCE_2026-09-01.md).
 
 ## Optional compatibility expansion
 

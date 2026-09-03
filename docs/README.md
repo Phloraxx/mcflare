@@ -26,6 +26,7 @@ If you are just trying to get a server online, start with **Installation → Set
 - [Build matrix](BUILD_MATRIX.md)
 - [Release process](RELEASE.md)
 - [Publishing outside GitHub](PUBLISHING.md)
+- [v1.0.1 release evidence](RELEASE_EVIDENCE_1.0.1.md)
 - [v1.0.0 release evidence](RELEASE_EVIDENCE_1.0.0.md)
 - [v1.0.0-rc.1 release evidence](RELEASE_EVIDENCE_1.0.0-rc.1.md)
 - [Test matrix](TEST_MATRIX.md)
