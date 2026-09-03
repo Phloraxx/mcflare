@@ -44,6 +44,31 @@ class WebSocketServerConnectionTest {
         }
     }
 
+    @Test void invalidWriteSliceFailsBeforeEmittingFrameBytes() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            client.setSoTimeout(150);
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+
+            assertThrows(IndexOutOfBoundsException.class, () -> ws.write(new byte[] {1}, 0, 2));
+            assertThrows(java.net.SocketTimeoutException.class, () -> client.getInputStream().read());
+            ws.close(); client.close();
+        }
+    }
+
+    @Test void invalidReadSliceFailsBeforeConsumingFrameBytes() throws Exception {
+        try (Harness h = new Harness()) {
+            Socket client = h.connect("/mcflare", "mcflare.v1", "");
+            WebSocketServerConnection ws = h.accept.get(2, TimeUnit.SECONDS);
+            client.getOutputStream().write(maskedFrame(0x2, true, new byte[] {'x'}));
+            client.getOutputStream().flush();
+
+            assertThrows(IndexOutOfBoundsException.class, () -> ws.read(new byte[1], 2, 0));
+            assertArrayEquals(new byte[] {'x'}, ws.readExact(1));
+            ws.close(); client.close();
+        }
+    }
+
     @Test void unmaskedClientFrameIsRejected() throws Exception {
         try (Harness h = new Harness()) {
             Socket client = h.connect("/mcflare", "mcflare.v1", "");

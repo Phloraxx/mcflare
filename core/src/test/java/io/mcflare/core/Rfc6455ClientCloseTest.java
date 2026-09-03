@@ -39,6 +39,19 @@ class Rfc6455ClientCloseTest {
         }
     }
 
+    @Test void invalidSendSliceFailsBeforeWritingFrameBytes() throws Exception {
+        try (ServerSocket server = new ServerSocket(0);
+             Socket raw = new Socket("127.0.0.1", server.getLocalPort());
+             Socket peer = server.accept()) {
+            peer.setSoTimeout(150);
+            Rfc6455Client client = wrap(raw);
+
+            assertThrows(IndexOutOfBoundsException.class, () -> client.sendBinary(new byte[] {1}, 0, 2));
+            assertThrows(java.net.SocketTimeoutException.class, () -> peer.getInputStream().read());
+            client.close();
+        }
+    }
+
     @Test void localCloseSendsMaskedCloseBeforeTcpEof() throws Exception {
         try (ServerSocket server = new ServerSocket(0);
              Socket raw = new Socket("127.0.0.1", server.getLocalPort());

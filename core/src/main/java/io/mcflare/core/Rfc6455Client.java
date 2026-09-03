@@ -315,6 +315,7 @@ public final class Rfc6455Client implements Closeable {
     }
 
     private void sendFrameLocked(int opcode, byte[] data, int offset, int length) throws IOException {
+        validateFrameSlice(data, offset, length);
         output.write(0x80 | (opcode & 0x0F));
         if (length <= 125) {
             output.write(0x80 | length);
@@ -439,6 +440,14 @@ public final class Rfc6455Client implements Closeable {
             }
         }
         return value;
+    }
+
+    private static void validateFrameSlice(byte[] data, int offset, int length) {
+        if (data == null) throw new NullPointerException("data");
+        if (offset < 0 || length < 0 || offset > data.length - length) {
+            throw new IndexOutOfBoundsException("invalid WebSocket payload slice");
+        }
+        if (length > MAX_FRAME) throw new IllegalArgumentException("WebSocket frame too large: " + length);
     }
 
     private long readUnsigned(int bytes) throws IOException {

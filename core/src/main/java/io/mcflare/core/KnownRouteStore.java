@@ -33,6 +33,7 @@ final class KnownRouteStore {
     }
 
     synchronized void remember(String key) {
+        if (loadFailure != null) throw new IllegalStateException(loadFailure);
         if (!validKey(key)) throw new IllegalArgumentException("invalid secure-route pin: " + key);
         if (keys.contains(key)) return;
         if (file == null) {

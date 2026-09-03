@@ -46,6 +46,17 @@ class KnownRouteStoreTest {
     }
 
     @Test
+    void corruptStoreRejectsRememberWithoutMutatingFile() throws Exception {
+        Path file = tempDir.resolve("known-hosts-v1.txt");
+        byte[] original = ("good.example.com:25565\n" + "bad entry\n").getBytes(StandardCharsets.UTF_8);
+        Files.write(file, original);
+        KnownRouteStore store = new KnownRouteStore(file);
+
+        assertThrows(IllegalStateException.class, () -> store.remember("other.example.com:25565"));
+        assertTrue(java.util.Arrays.equals(original, Files.readAllBytes(file)));
+    }
+
+    @Test
     void persistedPinUsesOwnerOnlyPermissionsWhenPosixIsAvailable() throws Exception {
         Path directory = tempDir.resolve("pins");
         Path file = directory.resolve("known-hosts-v1.txt");

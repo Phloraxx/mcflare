@@ -85,6 +85,7 @@ final class WebSocketServerConnection implements Closeable {
     }
 
     int read(byte[] target, int offset, int length) throws IOException {
+        validateSlice(target, offset, length);
         if (length == 0) return 0;
         while (currentOffset >= current.length) {
             current = readNextDataFrame();
@@ -117,6 +118,8 @@ final class WebSocketServerConnection implements Closeable {
         write(data, 0, data.length);
     }
     void write(byte[] data, int offset, int length) throws IOException {
+        validateSlice(data, offset, length);
+        if (length > MAX_FRAME) throw new IllegalArgumentException("WebSocket frame too large: " + length);
         synchronized (writeLock) {
             if (closed) throw new EOFException("WebSocket closed");
             output.write(0x82);
@@ -135,6 +138,13 @@ final class WebSocketServerConnection implements Closeable {
             }
             output.write(data, offset, length);
             output.flush();
+        }
+    }
+
+    private static void validateSlice(byte[] data, int offset, int length) {
+        if (data == null) throw new NullPointerException("data");
+        if (offset < 0 || length < 0 || offset > data.length - length) {
+            throw new IndexOutOfBoundsException("invalid WebSocket buffer slice");
         }
     }
 
