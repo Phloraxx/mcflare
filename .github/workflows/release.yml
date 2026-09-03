@@ -74,6 +74,8 @@ jobs:
           -Padapter_java_version="${{ matrix.java }}"
           -Puse_mojang_mappings="${{ matrix.mappings }}"
           -Partifact_label="${{ matrix.artifact }}"
+      - name: Normalize release archive
+        run: python3 scripts/normalize_zip.py "build/libs/mcflare-fabric-${{ matrix.artifact }}-${VERSION}.jar"
       - name: Stage binary
         run: |
           mkdir -p dist
@@ -160,6 +162,8 @@ jobs:
           -Padapter_java_version="${{ matrix.java }}"
           -Puse_mojang_mappings="${{ matrix.fabric_mappings }}"
           -Partifact_label="${{ matrix.artifact }}"
+      - name: Normalize release archive
+        run: python3 scripts/normalize_zip.py "neoforge/build/libs/mcflare-neoforge-${{ matrix.artifact }}-${VERSION}.jar"
       - name: Stage binary
         run: |
           mkdir -p dist
@@ -199,6 +203,8 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Build Paper/Purpur release artifact
         run: ./gradlew --no-daemon :core:build :gateway:build :paper:clean :paper:build -Prelease_version="$VERSION"
+      - name: Normalize release archive
+        run: python3 scripts/normalize_zip.py "paper/build/libs/mcflare-paper-${VERSION}.jar"
       - name: Stage binary
         run: |
           mkdir -p dist

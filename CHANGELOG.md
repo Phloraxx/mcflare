@@ -4,7 +4,9 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 
 ## Unreleased
 
-No changes yet.
+### Fixed
+
+- Normalize archive timestamps and file order so clean release builds are byte-reproducible, including Fabric artifacts with nested `core` and `gateway` JARs.
 
 ## 1.0.0-rc.1 - 2026-09-03
 

@@ -14,7 +14,7 @@ sha256:6dca657bd5dac71e5d735f94a73cf1f957b5aeb26fe29b4935b2ec76e9144a02
 
 The downloaded bundle contained exactly five JARs plus `SHA256SUMS.txt`, and `sha256sum -c SHA256SUMS.txt` passed for every JAR.
 
-## Exact JAR SHA-256
+## Dry-run JAR SHA-256
 
 ```text
 faeb5ee881c4e48299f6efc022c88daa83268c2b62cdf7869bca9f2a8aada3b8  mcflare-fabric-1.21.11-1.0.0-rc.1.jar
@@ -23,6 +23,20 @@ faeb5ee881c4e48299f6efc022c88daa83268c2b62cdf7869bca9f2a8aada3b8  mcflare-fabric
 bf84615d9e5ba361bbf36c83ff6e2179cf3ec01555baa48f44a5a6ce1d63b693  mcflare-neoforge-26.1-26.2-1.0.0-rc.1.jar
 03ed4a32bf3cc3c3cd45465a7948cd7399752ef7fd487fd8a3807715d871383f  mcflare-paper-1.0.0-rc.1.jar
 ```
+
+## Published prerelease SHA-256
+
+The tag workflow rebuilt the same five logical artifacts and published them with its own `SHA256SUMS.txt`; that checksum file verifies successfully. Four JARs were byte-identical to the dry run. Loom 1.15 preserved build-time ZIP timestamps on the nested `core`/`gateway` entries of the Fabric 26.1–26.2 outer JAR, so that one archive had a different outer SHA despite identical extracted payload bytes.
+
+```text
+faeb5ee881c4e48299f6efc022c88daa83268c2b62cdf7869bca9f2a8aada3b8  mcflare-fabric-1.21.11-1.0.0-rc.1.jar
+142a6bd0fe2f098012ff529528a17a0c265d859be7f4b2de5a7fabe8791a29d2  mcflare-fabric-26.1-26.2-1.0.0-rc.1.jar
+5bb93a6a9492c6ca264ed7990d2f0e26a7025179b7dd470688d77df4d146cea0  mcflare-neoforge-1.21.11-1.0.0-rc.1.jar
+bf84615d9e5ba361bbf36c83ff6e2179cf3ec01555baa48f44a5a6ce1d63b693  mcflare-neoforge-26.1-26.2-1.0.0-rc.1.jar
+03ed4a32bf3cc3c3cd45465a7948cd7399752ef7fd487fd8a3807715d871383f  mcflare-paper-1.0.0-rc.1.jar
+```
+
+The exact published Fabric 26.1–26.2 JAR was then smoke-tested separately on Minecraft 26.1 and 26.2 and passed both direct Status and `/mcflare` Status. The release assets were left immutable; archive timestamp normalization is fixed for subsequent releases.
 
 Fabric, NeoForge, and Paper metadata inside those files all advertised `1.0.0-rc.1`. The Fabric artifacts also contained version-matched nested `core` and `gateway` JARs.
 
