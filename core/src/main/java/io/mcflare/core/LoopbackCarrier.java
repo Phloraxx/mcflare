@@ -67,7 +67,9 @@ public final class LoopbackCarrier implements Closeable {
             local.setKeepAlive(true);
             bridge(local);
         } catch (IOException e) {
-            if (!closed.get()) report(e);
+            boolean shouldReport = !closed.get();
+            close();
+            if (shouldReport) report(e);
         } finally {
             close();
         }
