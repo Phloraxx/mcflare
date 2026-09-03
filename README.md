@@ -4,62 +4,85 @@
 [![Release](https://img.shields.io/github/v/release/Phloraxx/mcflare?include_prereleases&sort=semver)](https://github.com/Phloraxx/mcflare/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Put a Minecraft Java server behind Cloudflare while players keep using a normal Minecraft address.
+Put a Minecraft Java server behind Cloudflare and let players keep joining with a normal Minecraft address.
 
-Players install the matching MCflare mod and join the server as usual, for example `play.example.com`. They do not need `cloudflared`, WARP, a VPN, a custom launcher, or a local proxy.
+Players install the matching MCflare mod and use `play.example.com` as usual. No `cloudflared`, WARP, VPN, Tunnel token, custom launcher, or local proxy is needed on the player side.
 
-[Download](https://github.com/Phloraxx/mcflare/releases) · [Installation](docs/INSTALLATION.md) · [Deployment](docs/DEPLOYMENT.md) · [FAQ](docs/FAQ.md)
+[Download](https://github.com/Phloraxx/mcflare/releases) · [Getting started](.github/wiki/Getting-Started.md) · [Deployment](.github/wiki/Choosing-a-Deployment.md) · [Troubleshooting](.github/wiki/Troubleshooting.md) · [Discussions](https://github.com/Phloraxx/mcflare/discussions)
+
+## How it looks
+
+```text
+Minecraft client
+      │  play.example.com
+      ▼
+  Cloudflare
+      │  wss://play.example.com/mcflare
+      ▼
+MCflare gateway
+      │  normal Minecraft TCP
+      ▼
+Minecraft server
+```
+
+The WebSocket part happens behind the scenes. Minecraft still sees its normal connection, and the player still types the normal server hostname.
+
+MCflare works with either Cloudflare's Orange Cloud proxy or a named Cloudflare Tunnel. Those are server-side deployment choices, not different player modes.
 
 ## Install
 
-Download the current release from [GitHub Releases](https://github.com/Phloraxx/mcflare/releases).
+Download the latest release and choose the artifact for your loader/server family.
 
-| Server / loader | File |
-|---|---|
-| Fabric / Quilt 1.21.11 | `mcflare-fabric-1.21.11-<version>.jar` |
-| Fabric / Quilt 26.1–26.2 | `mcflare-fabric-26.1-26.2-<version>.jar` |
-| NeoForge 1.21.11 | `mcflare-neoforge-1.21.11-<version>.jar` |
-| NeoForge 26.1–26.2 | `mcflare-neoforge-26.1-26.2-<version>.jar` |
-| Paper / Purpur | `mcflare-paper-<version>.jar` |
+| Setup | Player | Server |
+|---|---|---|
+| Fabric / Quilt 1.21.11 | Fabric JAR | same Fabric JAR |
+| Fabric / Quilt 26.1–26.2 | Fabric JAR | same Fabric JAR |
+| NeoForge 1.21.11 | NeoForge JAR | same NeoForge JAR |
+| NeoForge 26.1–26.2 | NeoForge JAR | same NeoForge JAR |
+| Paper / Purpur | Fabric/Quilt or NeoForge JAR | Paper plugin |
 
-For Fabric, Quilt, and NeoForge, use the matching JAR on the player and the modded server. Paper/Purpur uses the server plugin; players use the Fabric/Quilt or NeoForge mod.
+Quilt uses the matching Fabric artifact. Paper/Purpur players still use a Fabric/Quilt or NeoForge client mod.
 
-On the server side, route `/mcflare` from the public hostname to the MCflare gateway. [Deployment](docs/DEPLOYMENT.md) has working examples for reverse proxies and Cloudflare Tunnel.
+Players put the JAR in `mods/`. Fabric, Quilt, and NeoForge servers do the same. Paper/Purpur servers put `mcflare-paper-<version>.jar` in `plugins/`.
 
-## Supported platforms
+Then route the exact `/mcflare` path from the public hostname to the MCflare gateway. The [deployment guide](.github/wiki/Choosing-a-Deployment.md) explains which Cloudflare path to use; [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) has the complete Traefik, Caddy, NGINX, and Tunnel examples.
 
-| Platform | Player | Server |
-|---|---:|---:|
-| Fabric | Yes | Yes |
-| Quilt | Yes | Yes |
-| NeoForge | Yes | Yes |
-| Paper | — | Yes |
-| Purpur | — | Yes |
+## What has been tested
 
-Current release families support Minecraft **1.21.11** and **26.1–26.2**. See [Compatibility](docs/COMPATIBILITY.md) for the exact Java and loader versions tested in CI.
+Current release families cover Minecraft **1.21.11** and **26.1–26.2** across Fabric/Quilt, NeoForge, Paper, and Purpur where applicable.
 
-## How it works
+The acceptance suite includes full LOGIN → CONFIGURATION → GAME sessions, long-lived gameplay, concurrency/churn, ordinary non-MCflare server regression, IPv4/IPv6 real-IP restoration, and authenticated `online-mode=true` joins through both Orange Cloud and a named Tunnel.
 
-```text
-Minecraft client → Cloudflare → MCflare gateway → Minecraft server
-```
+See [Compatibility](.github/wiki/Compatibility.md) for the short support table and [the test matrix](docs/TEST_MATRIX.md) for the detailed evidence.
 
-MCflare carries Minecraft Java's existing TCP byte stream through a WebSocket and turns it back into a normal Minecraft connection at the server. It works with either Cloudflare's Orange Cloud proxy or a named Cloudflare Tunnel.
+## Real player IP
 
-Real player IP forwarding is supported through trusted Cloudflare visitor metadata and PROXY protocol v1. The protocol, trust model, and downgrade behavior are documented in [Architecture](docs/V1_ARCHITECTURE.md), [Wire protocol](docs/V1_PROTOCOL.md), and [Real player IP](docs/REAL_IP.md).
+Cloudflare terminates the public WebSocket, so MCflare can translate trusted Cloudflare visitor metadata into PROXY protocol v1 before the Minecraft stream. This lets the backend recover the visitor address for logs, native IP bans, and moderation tooling.
 
-MCflare only carries Minecraft Java's own connection. Voice chat, web maps, and other separate sockets need their own path.
+Both sides must agree on PROXY mode. Read [Real player IP](.github/wiki/Real-Player-IP.md) before enabling it.
 
-## Documentation
+## What MCflare does not carry
 
-- [Installation](docs/INSTALLATION.md)
-- [Choose between Orange Cloud and Tunnel](docs/SETUP_CHOICES.md)
-- [Deployment examples](docs/DEPLOYMENT.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [All documentation](docs/README.md)
+MCflare carries Minecraft Java's own connection. A proximity voice-chat socket, Dynmap, a web panel, or another separate UDP/TCP/HTTP service still needs its own network path.
 
-Questions belong in [Discussions](https://github.com/Phloraxx/mcflare/discussions); reproducible bugs belong in [Issues](https://github.com/Phloraxx/mcflare/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for builds and pull requests.
+It also does not make a public origin private just because a DNS record is Orange Cloud. Follow the [origin protection guidance](docs/DEPLOYMENT.md#orange-origin-protection) for that deployment.
 
-MCflare is MIT-licensed. It includes selected MIT-licensed ideas and Minecraft integration work derived from Modflared by Rafael / HttpRafa; see [NOTICE.md](NOTICE.md).
+## Guides
 
-MCflare is independent of Mojang Studios, Microsoft, and Cloudflare.
+- [Getting started](.github/wiki/Getting-Started.md)
+- [Choosing Orange Cloud or Tunnel](.github/wiki/Choosing-a-Deployment.md)
+- [Orange Cloud](.github/wiki/Orange-Cloud.md)
+- [Cloudflare Tunnel](.github/wiki/Cloudflare-Tunnel.md)
+- [Real player IP](.github/wiki/Real-Player-IP.md)
+- [Troubleshooting](.github/wiki/Troubleshooting.md)
+- [FAQ](.github/wiki/FAQ.md)
+
+The [technical documentation](docs/README.md) contains the protocol, architecture, build matrix, test evidence, and maintainer notes.
+
+## Help and contributing
+
+Use [Discussions](https://github.com/Phloraxx/mcflare/discussions) for setup questions and ideas, and [Issues](https://github.com/Phloraxx/mcflare/issues) for reproducible bugs.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for builds and pull requests and [SECURITY.md](SECURITY.md) for security reports.
+
+MCflare is MIT-licensed and includes selected MIT-licensed work derived from Modflared by Rafael / HttpRafa; see [NOTICE.md](NOTICE.md). It is an independent hobby project and is not affiliated with Mojang Studios, Microsoft, or Cloudflare.
