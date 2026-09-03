@@ -56,7 +56,7 @@ public final class McflareGateway implements Closeable {
         InetSocketAddress listen = parseAddress(args.length > 0 ? args[0] : "127.0.0.1:25577");
         InetSocketAddress minecraft = parseAddress(args.length > 1 ? args[1] : "127.0.0.1:25565");
         int maxConnections = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_MAX_CONNECTIONS;
-        boolean proxyProtocol = args.length > 3 && Boolean.parseBoolean(args[3]);
+        boolean proxyProtocol = args.length > 3 && parseBoolean("proxy protocol", args[3]);
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
         McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
                 DEFAULT_PRE_BACKEND_TIMEOUT_MS, System.out::println, System.err::println);
@@ -79,6 +79,7 @@ public final class McflareGateway implements Closeable {
     static McflareGateway startAsync(InetSocketAddress listen, InetSocketAddress minecraft,
                                       int maxConnections, boolean proxyProtocol, int preBackendTimeoutMs,
                                       Consumer<String> infoLog, Consumer<String> errorLog) throws IOException {
+        if (listen == null || minecraft == null) throw new IllegalArgumentException("listen and Minecraft endpoints are required");
         if (maxConnections < 1) throw new IllegalArgumentException("max connections must be positive");
         if (preBackendTimeoutMs < 1) throw new IllegalArgumentException("pre-backend timeout must be positive");
         if (infoLog == null || errorLog == null) throw new IllegalArgumentException("log consumers are required");
@@ -296,6 +297,13 @@ public final class McflareGateway implements Closeable {
             output.write(buffer, 0, read);
             output.flush();
         }
+    }
+
+    static boolean parseBoolean(String name, String value) {
+        String normalized = value == null ? "" : value.trim();
+        if ("true".equalsIgnoreCase(normalized)) return true;
+        if ("false".equalsIgnoreCase(normalized)) return false;
+        throw new IllegalArgumentException(name + " must be true or false");
     }
 
     private static InetSocketAddress parseAddress(String value) {

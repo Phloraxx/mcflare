@@ -1,6 +1,8 @@
 package io.mcflare.gateway;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -22,6 +24,25 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class McflareGatewayLifecycleTest {
+    @Test
+    void standaloneBooleanParsingRejectsTypos() {
+        assertTrue(McflareGateway.parseBoolean("proxy protocol", " true "));
+        assertFalse(McflareGateway.parseBoolean("proxy protocol", "FALSE"));
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.parseBoolean("proxy protocol", "treu"));
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.parseBoolean("proxy protocol", null));
+    }
+
+    @Test
+    void startRejectsMissingEndpointsBeforeBinding() {
+        InetSocketAddress endpoint = new InetSocketAddress("127.0.0.1", 25565);
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.startAsync(null, endpoint, 1, false));
+        assertThrows(IllegalArgumentException.class,
+                () -> McflareGateway.startAsync(endpoint, null, 1, false));
+    }
+
     @Test
     void backendEofClosesWebSocketAndReleasesConnectionSlot() throws Exception {
         ServerSocket backendListener = new ServerSocket();
