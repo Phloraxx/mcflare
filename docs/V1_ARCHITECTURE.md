@@ -246,7 +246,7 @@ The architecture has been exercised across:
 
 The detailed acceptance record belongs in [TEST_MATRIX.md](TEST_MATRIX.md) and [TEST_EVIDENCE_2026-09-01.md](TEST_EVIDENCE_2026-09-01.md), not in the architecture contract.
 
-Authenticated Mojang `online-mode=true` proof, IANA registration, a naturally occurring Cloudflare-edge-initiated WebSocket termination, and larger graphical/world-generation stress remain optional future validation/formalization for this hobby project.
+Authenticated Mojang `online-mode=true` login is now proven through both supported Cloudflare delivery modes with the published `v1.0.0-rc.1` Fabric client. IANA registration, a naturally occurring Cloudflare-edge-initiated WebSocket termination, and larger graphical/world-generation stress remain optional future validation/formalization for this hobby project.
 
 ## Related docs
 

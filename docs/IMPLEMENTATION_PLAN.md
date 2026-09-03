@@ -95,12 +95,11 @@ Current state:
 - named-Tunnel local connector restart recovery: PASS — an in-world real client disconnected cleanly when the test `cloudflared` connector restarted, all gateway/backend sockets closed, and a fresh real client rejoined after connector recovery;
 - true-Orange client-network black-hole teardown/recovery: PASS — removing only the live client container network disconnected the player, the hardened gateway closed both backend and WSS sides, no `25585/25587` socket remained, and fresh-client recovery is proven;
 - 30-minute active-gameplay latency/jitter characterization: PASS — 1801.449 seconds, 120 cycles/240 probes, 240/240 successful, zero route mismatches, player online throughout, and exactly one gameplay WSS connection per cycle. True Orange measured mean/p50/p95/max 155.58/145.57/187.57/451.25 ms; named Tunnel measured 164.34/154.36/197.85/447.76 ms;
-- the acceptance server was offline-mode, so authenticated Mojang online-mode login remains unproven.
+- authenticated Mojang `online-mode=true` login: PASS on 2026-09-03 with the published `v1.0.0-rc.1` Fabric client through both true Orange and the named Tunnel;
 
 Optional future validation/formalization:
 
 - optional public protocol publication/IANA registration if MCflare later needs third-party interoperability formalization;
-- optional online-mode/authenticated client proof for Mojang session-authentication validation;
 - optional observation of an actual Cloudflare-edge interruption if one occurs naturally; do not substitute a local simulation and label it an edge outage;
 
 ## Gate 7 - compatibility expansion
@@ -117,8 +116,8 @@ Fabric and NeoForge version-branch reduction is now proven:
 
 Next order:
 
-1. Build the exact release artifacts through the tag/manual release workflow and smoke-test those packaged JARs.
-2. Keep IANA registration, authenticated Mojang online-mode proof, and natural Cloudflare-edge interruption observation as optional future validation/formalization.
+1. Keep release artifacts and public compatibility metadata aligned with the tested platform matrix.
+2. Keep IANA registration and natural Cloudflare-edge interruption observation as optional future validation/formalization; authenticated Mojang online-mode proof is complete.
 
 Optional expansion after those boundaries: larger graphical/world-generation stress, real-client runtime expansion to Quilt/NeoForge, then demand-driven older Minecraft/Forge targets. The higher-scale MCflare transport/session concurrency gate is already complete.
 

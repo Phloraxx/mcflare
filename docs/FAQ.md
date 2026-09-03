@@ -105,7 +105,7 @@ Yes. MCflare carries Minecraft's stream; it does not replace Minecraft's own pro
 
 ## Does `online-mode=true` work?
 
-MCflare is designed to be transparent to Minecraft's login/authentication bytes, and the transport has been exercised through the full LOGIN → CONFIGURATION → GAME path. A dedicated authenticated Mojang-account proof is currently optional rather than a hobby-release blocker.
+Yes. A real Minecraft 26.2 client using the published `v1.0.0-rc.1` Fabric JAR completed Microsoft/Mojang authentication and joined an isolated `online-mode=true`, `enforce-secure-profile=true` server through both true Orange Cloudflare proxying and the named Tunnel. See [TEST_EVIDENCE_2026-09-03.md](TEST_EVIDENCE_2026-09-03.md).
 
 ## What happens if Cloudflare or the WebSocket connection dies during gameplay?
 

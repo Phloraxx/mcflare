@@ -94,7 +94,7 @@ A disposable Quick Tunnel connector registered successfully and reported healthy
 
 The side-by-side legacy regressions, PufferPanel health check, direct Minecraft regression, final clean build, and actual Java `Rfc6455Client` Status probes are complete. Remaining before a stable release:
 
-- authenticated/online-mode login remains unproven; later in this document a real rebuilt Fabric 26.1 offline-mode client full world join through `/mcflare` is proven on both Orange and Tunnel;
+- authenticated/online-mode login was still unproven at this 2026-09-01 checkpoint; it was later closed on 2026-09-03 with the published `v1.0.0-rc.1` Fabric client through both Orange and Tunnel; see [TEST_EVIDENCE_2026-09-03.md](TEST_EVIDENCE_2026-09-03.md);
 - sustained gameplay and reconnect tests;
 - connection concurrency/overload tests on the new integrated server path;
 - live IPv6 visitor-IP restoration test (completed later in this document);

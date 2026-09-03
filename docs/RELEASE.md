@@ -12,7 +12,7 @@ For this hobby project, a release candidate requires:
 4. documentation/support matrix and changelog match the artifacts;
 5. `SHA256SUMS.txt` is generated from the final binaries.
 
-The following are **not** release blockers: IANA registration of `mcflare.v1`, intentionally forcing a Cloudflare-edge restart, Mojang `online-mode=true` proof, or larger graphical/world-generation stress. They may be useful future validation.
+The following are **not** release blockers: IANA registration of `mcflare.v1`, intentionally forcing a Cloudflare-edge restart, or larger graphical/world-generation stress. Authenticated Mojang `online-mode=true` login is already proven separately with the published `v1.0.0-rc.1` Fabric artifact.
 
 ## Dry-run a release build
 
