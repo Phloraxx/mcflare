@@ -123,6 +123,10 @@ final class KnownRouteStore {
         if (colon <= 0 || colon == key.length() - 1) return false;
         String host = key.substring(0, colon);
         if (!RouteResolver.isProbeCandidate(host) || !host.equals(RouteResolver.normalizeHost(host))) return false;
+        for (int i = 0; i < host.length(); i++) {
+            char c = host.charAt(i);
+            if (c <= 0x20 || c == 0x7F || c == '/' || c == '\\') return false;
+        }
         try {
             int port = Integer.parseInt(key.substring(colon + 1));
             return port > 0 && port <= 65535;

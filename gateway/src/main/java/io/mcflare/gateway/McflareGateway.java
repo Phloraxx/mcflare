@@ -85,19 +85,35 @@ public final class McflareGateway implements Closeable {
         McflareGateway gateway = new McflareGateway(listen, minecraft, maxConnections, proxyProtocol,
                 preBackendTimeoutMs, infoLog, errorLog);
         gateway.bindListener();
-        Thread thread = new Thread(gateway::runLoop, "mcflare-gateway-accept");
-        thread.setDaemon(true);
-        thread.start();
-        return gateway;
+        try {
+            Thread thread = new Thread(gateway::runLoop, "mcflare-gateway-accept");
+            thread.setDaemon(true);
+            thread.start();
+            return gateway;
+        } catch (RuntimeException | Error error) {
+            gateway.close();
+            throw error;
+        }
     }
 
     private void bindListener() throws IOException {
         ServerSocket server = new ServerSocket();
-        server.bind(listen);
-        listener = server;
-        infoLog.accept("MCFLARE_GATEWAY event=listen listen=" + listen + " minecraft=" + minecraft
-                + " maxConnections=" + maxConnections + " preBackendTimeoutMs=" + preBackendTimeoutMs
-                + " proxyProtocol=" + proxyProtocol);
+        try {
+            server.bind(listen);
+            listener = server;
+        } catch (IOException | RuntimeException error) {
+            closeQuietly(server);
+            throw error;
+        }
+        try {
+            infoLog.accept("MCFLARE_GATEWAY event=listen listen=" + listen + " minecraft=" + minecraft
+                    + " maxConnections=" + maxConnections + " preBackendTimeoutMs=" + preBackendTimeoutMs
+                    + " proxyProtocol=" + proxyProtocol);
+        } catch (RuntimeException error) {
+            listener = null;
+            closeQuietly(server);
+            throw error;
+        }
     }
 
     private void runLoop() {
@@ -244,10 +260,15 @@ public final class McflareGateway implements Closeable {
 
     private static Socket connectTcp(InetSocketAddress target) throws IOException {
         Socket socket = new Socket();
-        socket.connect(target, 3000);
-        socket.setTcpNoDelay(true);
-        socket.setKeepAlive(true);
-        return socket;
+        try {
+            socket.connect(target, 3000);
+            socket.setTcpNoDelay(true);
+            socket.setKeepAlive(true);
+            return socket;
+        } catch (IOException | RuntimeException error) {
+            closeQuietly(socket);
+            throw error;
+        }
     }
 
     private static Thread startPipeThread(InputStream input, OutputStream output, String name,

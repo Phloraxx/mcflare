@@ -28,6 +28,17 @@ class Rfc6455ClientCloseTest {
         }
     }
 
+    @Test void configuredReadTimeoutBoundsSilentPeer() throws Exception {
+        try (ServerSocket server = new ServerSocket(0);
+             Socket raw = new Socket("127.0.0.1", server.getLocalPort());
+             Socket peer = server.accept()) {
+            Rfc6455Client client = wrap(raw);
+            client.setReadTimeout(100);
+            assertThrows(java.net.SocketTimeoutException.class, client::readData);
+            client.close();
+        }
+    }
+
     @Test void localCloseSendsMaskedCloseBeforeTcpEof() throws Exception {
         try (ServerSocket server = new ServerSocket(0);
              Socket raw = new Socket("127.0.0.1", server.getLocalPort());

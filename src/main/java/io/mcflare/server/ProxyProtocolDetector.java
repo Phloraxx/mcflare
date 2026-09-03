@@ -77,7 +77,7 @@ public final class ProxyProtocolDetector extends ChannelInboundHandlerAdapter {
         ByteBuf replay = buffered;
         buffered = null;
         pipeline.remove(this);
-        if (replay.isReadable()) pipeline.fireChannelRead(replay);
+        if (replay.isReadable()) ctx.fireChannelRead(replay);
         else replay.release();
     }
 

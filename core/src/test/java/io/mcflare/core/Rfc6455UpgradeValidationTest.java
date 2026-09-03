@@ -3,6 +3,9 @@ package io.mcflare.core;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
@@ -33,6 +36,29 @@ class Rfc6455UpgradeValidationTest {
     @Test void nonHttp11SwitchingProtocolsStatusIsRejected() {
         String invalid = response("").replace("HTTP/1.1 101", "HTTP/1.0 101");
         assertThrows(IOException.class, () -> Rfc6455Client.validateUpgradeResponse(invalid, KEY, null));
+    }
+
+    @Test void upgradeHeaderReadUsesAbsoluteDeadlineDespiteSlowDrip() throws Exception {
+        try (ServerSocket server = new ServerSocket(0);
+             Socket client = new Socket("127.0.0.1", server.getLocalPort());
+             Socket peer = server.accept()) {
+            Thread writer = new Thread(() -> {
+                byte[] bytes = "HTTP/1.1 101 Switching Protocols\r\n".getBytes(StandardCharsets.US_ASCII);
+                for (byte value : bytes) {
+                    try {
+                        peer.getOutputStream().write(value);
+                        peer.getOutputStream().flush();
+                        Thread.sleep(30L);
+                    } catch (Exception stopped) {
+                        return;
+                    }
+                }
+            });
+            writer.setDaemon(true);
+            writer.start();
+            assertThrows(SocketTimeoutException.class,
+                    () -> Rfc6455Client.readHeaders(client.getInputStream(), client, 150));
+        }
     }
 
     @Test void arbitraryStatusLineContaining101IsRejected() {

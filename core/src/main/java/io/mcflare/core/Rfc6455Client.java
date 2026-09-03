@@ -60,21 +60,23 @@ public final class Rfc6455Client implements Closeable {
                                          int connectTimeoutMs, int readTimeoutMs,
                                          String requiredSubprotocol) throws IOException {
         host = validateHost(host);
+        if (port < 1 || port > 65535) throw new IllegalArgumentException("port");
         if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("path");
+        if (connectTimeoutMs < 1) throw new IllegalArgumentException("connectTimeoutMs");
+        if (readTimeoutMs < 0) throw new IllegalArgumentException("readTimeoutMs");
 
         Socket raw = connectTcp(host, port, connectTimeoutMs);
-        raw.setTcpNoDelay(true);
-        raw.setKeepAlive(true);
-        raw.setSoTimeout(connectTimeoutMs);
-
         SSLSocket ssl = null;
         try {
+            raw.setTcpNoDelay(true);
+            raw.setKeepAlive(true);
+            raw.setSoTimeout(connectTimeoutMs);
             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
             ssl = (SSLSocket) factory.createSocket(raw, host, port, true);
             configureTls(ssl, host);
             ssl.startHandshake();
             Rfc6455Client client = new Rfc6455Client(ssl);
-            client.upgrade(host, port, path, requiredSubprotocol);
+            client.upgrade(host, port, path, requiredSubprotocol, connectTimeoutMs);
             ssl.setSoTimeout(readTimeoutMs);
             return client;
         } catch (IOException | RuntimeException e) {
@@ -89,8 +91,13 @@ public final class Rfc6455Client implements Closeable {
         if (addresses.length == 0) throw new IOException("No addresses for " + host);
         if (addresses.length == 1) {
             Socket socket = new Socket();
-            socket.connect(new InetSocketAddress(addresses[0], port), timeoutMs);
-            return socket;
+            try {
+                socket.connect(new InetSocketAddress(addresses[0], port), timeoutMs);
+                return socket;
+            } catch (IOException | RuntimeException error) {
+                try { socket.close(); } catch (IOException ignored) {}
+                throw error;
+            }
         }
 
         final Object stateLock = new Object();
@@ -175,7 +182,8 @@ public final class Rfc6455Client implements Closeable {
         ssl.setSSLParameters(parameters);
     }
 
-    private void upgrade(String host, int port, String path, String requiredSubprotocol) throws IOException {
+    private void upgrade(String host, int port, String path, String requiredSubprotocol,
+                         int handshakeTimeoutMs) throws IOException {
         byte[] nonce = new byte[16];
         random.nextBytes(nonce);
         String key = Base64.getEncoder().encodeToString(nonce);
@@ -191,7 +199,7 @@ public final class Rfc6455Client implements Closeable {
         output.write(request.getBytes(StandardCharsets.US_ASCII));
         output.flush();
 
-        String headers = readHeaders(input);
+        String headers = readHeaders(input, socket, handshakeTimeoutMs);
         validateUpgradeResponse(headers, key, requiredSubprotocol);
     }
 
@@ -240,10 +248,16 @@ public final class Rfc6455Client implements Closeable {
         return false;
     }
 
-    private static String readHeaders(InputStream in) throws IOException {
+    static String readHeaders(InputStream in, Socket socket, int timeoutMs) throws IOException {
+        if (timeoutMs < 1) throw new IllegalArgumentException("timeoutMs");
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         int state = 0;
         while (bytes.size() < MAX_HEADERS) {
+            long remaining = deadlineNanos - System.nanoTime();
+            if (remaining <= 0L) throw new SocketTimeoutException("WebSocket upgrade deadline exceeded");
+            long millis = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining));
+            socket.setSoTimeout((int) Math.min(Integer.MAX_VALUE, millis));
             int b = in.read();
             if (b < 0) throw new EOFException("EOF during WebSocket upgrade");
             bytes.write(b);
