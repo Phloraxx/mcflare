@@ -52,7 +52,7 @@ Registration is an administrative external action and is intentionally not perfo
 These are outside the unit/integration suite and must not be replaced by misleading simulations:
 
 - public protocol publication plus IANA registration of exact `mcflare.v1` is optional future formalization for this hobby project;
-- authenticated-client validation with `online-mode=true` is now proven with the published `v1.0.0-rc.1` Fabric client through both true Orange and the named Tunnel; see [TEST_EVIDENCE_2026-09-03.md](TEST_EVIDENCE_2026-09-03.md);
+- authenticated-client validation with `online-mode=true` is proven with the exact `1.0.1` release-package Fabric client through both true Orange and the named Tunnel; see [RELEASE_EVIDENCE_1.0.1.md](RELEASE_EVIDENCE_1.0.1.md);
 - observation of behavior if Cloudflare itself terminates an established edge WebSocket during an edge deployment/restart remains distinct from the already-proven local connector restart and client-network-loss tests.
 
 Larger graphical/world-generation concurrency on production-shaped hardware is optional performance characterization. MCflare transport/session concurrency is already proven at 16 simultaneous GAME-state clients plus four 16-client churn cohorts on each public delivery mode.

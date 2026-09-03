@@ -105,7 +105,7 @@ Yes. MCflare carries Minecraft's stream; it does not replace Minecraft's own pro
 
 ## Does `online-mode=true` work?
 
-Yes. A real Minecraft 26.2 client using the published `v1.0.0-rc.1` Fabric JAR completed Microsoft/Mojang authentication and joined an isolated `online-mode=true`, `enforce-secure-profile=true` server through both true Orange Cloudflare proxying and the named Tunnel. See [TEST_EVIDENCE_2026-09-03.md](TEST_EVIDENCE_2026-09-03.md).
+Yes. A real Minecraft 26.2 client using the exact `1.0.1` release-package Fabric JAR completed Microsoft/Mojang authentication and joined an isolated `online-mode=true`, `enforce-secure-profile=true` server through both true Orange Cloudflare proxying and the named Tunnel. See [RELEASE_EVIDENCE_1.0.1.md](RELEASE_EVIDENCE_1.0.1.md).
 
 ## What happens if Cloudflare or the WebSocket connection dies during gameplay?
 

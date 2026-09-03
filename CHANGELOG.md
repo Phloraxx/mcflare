@@ -4,6 +4,10 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## 1.0.1 - 2026-09-04
+
 ### Fixed
 
 - Close active client sessions when the shared gateway is stopped, so plugin/server shutdown cannot leave old gateway threads and backend streams alive.
@@ -17,11 +21,13 @@ Notable changes to the rebuilt MCflare line are recorded here. The changelog sta
 
 ### Changed
 
-- Advance ordinary development builds to `1.0.1-dev` after the `1.0.0` stable release.
 - Remove the unused client carrier getter from the internal Mixin bridge.
 - Run the full CI matrix once per pull request instead of duplicating it for both the branch push and pull-request event; merged `main` still receives its own full CI run.
 - Remove unused Maven-publication, IDE-plugin, and source-JAR build plumbing from the Fabric root build.
 - Pin Fabric Loom to fixed published versions in development, CI, and release builds so release inputs do not depend on mutable `-SNAPSHOT` coordinates.
+- Update the Gradle wrapper from 9.6.1 to 9.7.1 after the full compatibility matrix passed.
+- Add monthly Gradle Dependabot checks while keeping JUnit on Java-8-compatible major lines for `core` and `gateway`.
+- No wire-protocol, `/mcflare` endpoint, player UX, deployment model, artifact family, or supported Minecraft-family change from `1.0.0`.
 
 ## 1.0.0 - 2026-09-03
 

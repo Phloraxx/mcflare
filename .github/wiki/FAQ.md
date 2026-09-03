@@ -10,7 +10,7 @@ The normal Minecraft hostname, for example `play.example.com`.
 
 ## Does `online-mode=true` work?
 
-Yes. A real Microsoft/Mojang-authenticated Minecraft 26.2 client using the published `v1.0.0-rc.1` Fabric artifact has completed a full world join through both Orange Cloud and a named Cloudflare Tunnel.
+Yes. A real Microsoft/Mojang-authenticated Minecraft 26.2 client using the exact `1.0.1` release-package Fabric artifact has completed a full world join through both Orange Cloud and a named Cloudflare Tunnel.
 
 ## Do Paper/Purpur players install the Paper plugin?
 
