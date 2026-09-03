@@ -11,6 +11,8 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,6 +27,7 @@ public final class McflareGateway implements Closeable {
     private final InetSocketAddress listen;
     private final InetSocketAddress minecraft;
     private final Semaphore connectionSlots;
+    private final Set<Socket> activeClients = ConcurrentHashMap.newKeySet();
     private final int maxConnections;
     private final boolean proxyProtocol;
     private final Consumer<String> infoLog;
@@ -96,12 +99,29 @@ public final class McflareGateway implements Closeable {
                 }
                 final Socket accepted = client;
                 final long sessionId = sessionSequence.getAndIncrement();
+                activeClients.add(accepted);
+                if (closed.get()) {
+                    activeClients.remove(accepted);
+                    connectionSlots.release();
+                    closeQuietly(accepted);
+                    break;
+                }
                 Thread thread = new Thread(() -> {
                     try { handle(accepted, sessionId); }
-                    finally { connectionSlots.release(); }
-                }, "mcflare-gateway-" + accepted.getPort());
+                    finally {
+                        activeClients.remove(accepted);
+                        connectionSlots.release();
+                    }
+                }, "mcflare-gateway-" + sessionId);
                 thread.setDaemon(true);
-                thread.start();
+                try {
+                    thread.start();
+                } catch (RuntimeException | Error error) {
+                    activeClients.remove(accepted);
+                    connectionSlots.release();
+                    closeQuietly(accepted);
+                    throw error;
+                }
             } catch (IOException error) {
                 if (!closed.get()) errorLog.accept("MCFLARE_GATEWAY accept error: " + error);
                 closeQuietly(client);
@@ -147,7 +167,7 @@ public final class McflareGateway implements Closeable {
             final WebSocketServerConnection activeWebSocket = webSocket;
             final Socket activeBackend = backend;
             Thread downstream = startPipeThread(activeBackend.getInputStream(),
-                    new WebSocketOutput(activeWebSocket), "mcflare-minecraft-downstream", termination,
+                    new WebSocketOutput(activeWebSocket), "mcflare-minecraft-downstream-" + sessionId, termination,
                     activeBackend, activeWebSocket);
             try {
                 pipe(new WebSocketInput(activeWebSocket), backendOut);
@@ -266,6 +286,7 @@ public final class McflareGateway implements Closeable {
     public void close() {
         if (!closed.compareAndSet(false, true)) return;
         closeQuietly(listener);
+        for (Socket client : activeClients) closeQuietly(client);
     }
 
     private static final class WebSocketInput extends InputStream {
