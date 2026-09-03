@@ -10,3 +10,11 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    ignore:
+      # core/ and gateway/ intentionally preserve Java 8 compatibility.
+      - dependency-name: org.junit.jupiter:junit-jupiter
+        update-types:
+          - version-update:semver-major
+      - dependency-name: org.junit.platform:junit-platform-launcher
+        update-types:
+          - version-update:semver-major
