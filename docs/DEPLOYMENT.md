@@ -1,33 +1,77 @@
 # MCflare Deployment Guide
 
-Status: Orange and named-Tunnel paths both live-validated on 2026-09-01.
+MCflare has one network protocol and two common ways to deliver it through Cloudflare. **Orange proxy** and **named Tunnel** are administrator infrastructure choices; players connect the same way in both cases.
+
+![MCflare Orange proxy and named Tunnel deployment options](assets/deployment.webp)
+
+> The diagram is conceptual. The configuration snippets below are the authoritative examples.
+
+## Shared contract
+
+Whichever ingress style you choose, the public endpoint is:
+
+```text
+wss://play.example.com/mcflare
+Sec-WebSocket-Protocol: mcflare.v1
+```
+
+The gateway is an ordinary HTTP/1.1 WebSocket application. It does not manage Cloudflare, DNS, certificates, ACME, Tunnel credentials, or public TLS.
+
+```text
+Cloudflare ingress → HTTP/WebSocket /mcflare → MCflare gateway → Minecraft TCP backend
+```
+
+## Which mode should I use?
+
+| | Orange proxy | Named Tunnel |
+|---|---|---|
+| Best fit | Existing HTTPS reverse proxy | Outbound-only/private application ingress |
+| Origin component | Traefik/Caddy/NGINX/etc. | `cloudflared` |
+| Public inbound HTTPS to MCflare origin | Usually yes | Not required for the Tunnel path |
+| Player changes | None | None |
+| MCflare wire protocol | `/mcflare` + `mcflare.v1` | `/mcflare` + `mcflare.v1` |
+| Main security concern | Protect the reachable origin | Protect Tunnel credentials and local service |
+
+For a guided decision, read [Choose Your MCflare Setup](SETUP_CHOICES.md).
 
 ## MCflare does not manage Cloudflare
 
-MCflare contains no Cloudflare API client, Tunnel token, Tunnel UUID, DNS credential, cloudflared downloader, cloudflared child process, certificate manager, or ACME client. Ingress is infrastructure owned by the administrator/hosting platform.
+MCflare deliberately contains no:
 
-The gateway is always the same ordinary HTTP/1.1 WebSocket application.
+- Cloudflare API client;
+- Tunnel token or Tunnel UUID;
+- DNS credential;
+- `cloudflared` downloader/child process;
+- certificate manager;
+- ACME client.
 
-## Mode A: Cloudflare Orange
+Those belong to the administrator's infrastructure. This keeps Cloudflare-specific deployment choices out of the player mod and out of the `mcflare.v1` wire contract.
 
-Use when the administrator controls an HTTPS ingress/reverse proxy.
+## Mode A: Cloudflare Orange proxy
+
+Use Orange proxy when Cloudflare can reach an HTTPS reverse proxy you already control.
 
 ```text
-player -> WSS :443 -> Cloudflare Orange -> Traefik/Caddy/Nginx -> MCflare HTTP listener -> Minecraft
+player
+  → WSS :443
+  → Cloudflare proxied hostname
+  → Traefik / Caddy / NGINX
+  → MCflare HTTP listener
+  → Minecraft
 ```
 
-Example routing intent:
+Routing intent:
 
 ```text
 Host(play.example.com) && Path(/mcflare)
-  -> http://127.0.0.1:25577
+  → http://127.0.0.1:25577
 ```
 
-The reverse proxy owns public TLS. MCflare does not need a certificate. Keep HTTP/1.1 WebSocket upgrade behavior to the local gateway; there is no need for MCflare to implement HTTP/2 origin serving. Cloudflare supports proxied WebSockets; ensure the zone WebSockets setting is enabled.
+The reverse proxy owns public TLS. MCflare itself does not need a public certificate.
 
 ### Traefik
 
-Traefik supports WebSocket upgrades without a WebSocket-specific middleware. A file-provider example is:
+Traefik supports WebSocket upgrade proxying without a WebSocket-specific middleware.
 
 ```yaml
 http:
@@ -38,6 +82,7 @@ http:
         - websecure
       service: mcflare
       tls: {}
+
   services:
     mcflare:
       loadBalancer:
@@ -45,11 +90,13 @@ http:
           - url: http://mcflare-gateway:25577
 ```
 
-Replace `mcflare-gateway:25577` with the private address Traefik can actually reach. If Traefik runs in a container, `127.0.0.1` refers to that container rather than the Minecraft host unless they share the same network namespace.
+Replace `mcflare-gateway:25577` with the private address Traefik can actually reach.
+
+> If Traefik runs in a container, `127.0.0.1` refers to that container—not automatically to the Minecraft host. Use a shared container network or another private reachable address.
 
 ### Caddy
 
-Caddy's `reverse_proxy` handles the WebSocket upgrade automatically:
+Caddy's `reverse_proxy` handles WebSocket upgrades automatically.
 
 ```caddyfile
 play.example.com {
@@ -58,11 +105,11 @@ play.example.com {
 }
 ```
 
-Use a private/container-network hostname instead of `127.0.0.1` when Caddy and MCflare do not share a host/network namespace.
+Use a private/container-network hostname instead of loopback when Caddy and MCflare do not share a network namespace.
 
 ### NGINX
 
-NGINX requires the WebSocket hop-by-hop upgrade headers to be forwarded explicitly:
+NGINX needs the WebSocket hop-by-hop upgrade headers forwarded explicitly.
 
 ```nginx
 location = /mcflare {
@@ -79,53 +126,89 @@ location = /mcflare {
 }
 ```
 
-The `CF-*` headers above must be trusted only when this origin path is reachable through controlled Cloudflare ingress. A directly reachable origin allows arbitrary clients to supply look-alike forwarding headers; firewall/private-bind the origin accordingly.
+The `CF-*` values are meaningful only when this origin path is actually reached through controlled Cloudflare ingress. A directly reachable origin can receive forged look-alike headers from arbitrary clients.
 
-## Mode B: Cloudflare Tunnel
+### Orange origin protection
 
-Use when inbound 443/reverse-proxy access is unavailable or intentionally avoided.
+A Cloudflare-proxied DNS record does **not** by itself make the origin unreachable.
+
+Recommended properties:
+
+- MCflare gateway bound to loopback/private networking where possible;
+- reverse proxy is the only component that can reach the gateway;
+- public origin access is restricted to the intended Cloudflare path where operationally practical;
+- do not expose a header-trusting gateway directly to arbitrary Internet clients;
+- optional infrastructure hardening such as Authenticated Origin Pulls may be layered on the reverse-proxy path.
+
+## Mode B: Cloudflare named Tunnel
+
+Use a named Tunnel when inbound HTTPS access is unavailable or intentionally avoided.
 
 ```text
-player -> WSS :443 -> Cloudflare -> Tunnel -> external cloudflared -> MCflare HTTP listener -> Minecraft
+player
+  → WSS :443
+  → Cloudflare
+  → named Tunnel
+  → cloudflared on server infrastructure
+  → MCflare HTTP listener
+  → Minecraft
 ```
 
-Example local ingress:
+A minimal locally managed ingress example is:
 
 ```yaml
 ingress:
   - hostname: play.example.com
     path: ^/mcflare$
     service: http://127.0.0.1:25577
+
   - service: http_status:404
 ```
 
-Cloudflare documents HTTP published applications as normal HTTPS-to-local-HTTP proxying. Non-HTTP services such as `tcp://` require client-side cloudflared; MCflare deliberately avoids that model by speaking standard WebSocket itself.
+The MCflare listener can stay on loopback because `cloudflared` is local to the server infrastructure.
+
+MCflare does not consume the Tunnel token and does not need to know the Tunnel ID. If `cloudflared` stops, existing WebSockets can disconnect and players reconnect after the connector recovers.
+
+### Why this is different from Cloudflare's generic TCP service mode
+
+MCflare deliberately speaks WebSocket itself. Players therefore use ordinary WSS through the hostname and do not need a client-side `cloudflared` process for the Minecraft connection.
 
 ## Multiple Minecraft instances
 
-Each server instance gets its own hostname and its own MCflare listener. Routing remains external.
+Use one hostname and one MCflare listener/backend per Minecraft instance.
 
-Orange example:
+### Orange example
 
 ```text
-survival.example.com /mcflare -> 127.0.0.1:25577 -> Minecraft :25565
-creative.example.com /mcflare -> 127.0.0.1:25578 -> Minecraft :25566
+survival.example.com /mcflare → 127.0.0.1:25577 → Minecraft :25565
+creative.example.com /mcflare → 127.0.0.1:25578 → Minecraft :25566
+modded.example.com   /mcflare → 127.0.0.1:25579 → Minecraft :25567
 ```
 
-Tunnel example:
+### Tunnel example
 
 ```yaml
-- hostname: survival.example.com
-  service: http://127.0.0.1:25577
-- hostname: creative.example.com
-  service: http://127.0.0.1:25578
+ingress:
+  - hostname: survival.example.com
+    path: ^/mcflare$
+    service: http://127.0.0.1:25577
+
+  - hostname: creative.example.com
+    path: ^/mcflare$
+    service: http://127.0.0.1:25578
+
+  - hostname: modded.example.com
+    path: ^/mcflare$
+    service: http://127.0.0.1:25579
+
+  - service: http_status:404
 ```
 
-Cloudflared ingress can also match request paths with regular expressions. MCflare itself does not duplicate this router.
+MCflare does not duplicate hostname routing internally.
 
-## Integrated Fabric / NeoForge server
+## Fabric / Quilt / NeoForge server
 
-The same Fabric or NeoForge loader JAR can load on its dedicated server. Both use the shared server adapter and generated config:
+The server-capable mod starts the shared gateway from `config/mcflare.properties`:
 
 ```properties
 enabled=true
@@ -133,68 +216,96 @@ listen=127.0.0.1:25577
 max-connections=256
 ```
 
-The backend Minecraft address/port is taken from the running dedicated server rather than duplicated in MCflare config. If the local listener port is occupied, MCflare logs the bind failure and Minecraft continues to run; choose another per-instance listener port.
+The Minecraft backend comes from the running dedicated server rather than a duplicate config value.
 
-## Paper / Purpur plugin
+If the MCflare listener port is already occupied, the server logs the bind failure rather than taking down Minecraft. Choose a different per-instance gateway port.
 
-Paper and Purpur use one server-only Java-21 plugin rather than the Minecraft Mixin adapter. The plugin starts/stops the same gateway and defaults `proxy-protocol: true` so real player IP remains a first-class requirement. Enable the platform's native setting:
+## Paper / Purpur server
+
+The Paper/Purpur plugin starts/stops the same shared gateway. When real player IP is required, keep:
+
+```yaml
+proxy-protocol: true
+```
+
+in the MCflare plugin config and enable the platform's native HAProxy support:
 
 ```yaml
 proxies:
   proxy-protocol: true
 ```
 
-The Minecraft backend port must then be treated as a PROXY-protocol backend: firewall/private-bind it so players cannot bypass MCflare and connect without a PROXY header. Do not add a second Paper/Purpur IP-forwarding implementation; the native server decoder is the standard handoff. The same plugin JAR is runtime-proven on Paper and Purpur 1.21.11, 26.1.2 and 26.2.
+A PROXY-enabled Minecraft backend should be private/firewalled so ordinary players cannot bypass MCflare and send raw Minecraft traffic where a PROXY prefix is expected.
+
+See [Real Player IP](REAL_IP.md).
 
 ## Standalone gateway
 
-For server software without an MCflare server adapter, run the Java-8-compatible gateway separately:
+For server software without an integrated MCflare server adapter, the Java-8-compatible gateway can be run separately:
 
 ```text
 McflareGateway <listen-host:port> <minecraft-host:port> [max-connections] [proxy-protocol]
 ```
 
-`proxy-protocol=false` is appropriate for a backend that does not understand PROXY protocol. Use true only when the backend server/proxy is configured to consume it.
+Use `proxy-protocol=true` only when the configured backend is prepared to consume HAProxy PROXY protocol v1.
 
 ## Security checklist
 
-- Orange DNS record is proxied.
-- Public Minecraft origin port is closed or otherwise not used as the protected hostname path where possible.
-- Gateway listener is loopback/private whenever infrastructure permits.
-- Reverse proxy passes WebSocket Upgrade/Connection headers and Cloudflare forwarding headers.
-- Do not put browser-interactive Managed Challenge/Access login in front of `/mcflare`.
-- Tunnel remains managed externally; no Tunnel token goes in MCflare config.
-- Keep old test routes separate during migrations; path-specific rules make side-by-side validation possible.
+Before calling a deployment complete:
+
+- [ ] `/mcflare` is the only MCflare route exposed for v1.
+- [ ] gateway listener is loopback/private whenever infrastructure permits.
+- [ ] reverse proxy/Tunnel preserves HTTP/1.1 WebSocket upgrade behavior.
+- [ ] Cloudflare visitor-IP headers are trusted only through controlled ingress.
+- [ ] the protected Minecraft origin is not accidentally exposed as an automatic client fallback.
+- [ ] PROXY output and backend PROXY parsing are either both enabled or both disabled.
+- [ ] a PROXY-enabled Minecraft backend is not publicly reachable by raw clients.
+- [ ] no Tunnel token/API credential exists in MCflare configuration or client files.
+- [ ] browser-interactive Access/Managed Challenge flows are not placed in front of `/mcflare`.
+- [ ] separate services such as voice chat or web maps have their own security/network plan.
 
 ## Gateway operational logging
 
-The gateway emits small structured operational events suitable for platform logs:
+The gateway emits small structured events suitable for platform logs:
 
-- `event=listen`: configured listener/backend, connection ceiling and PROXY-mode state;
-- `event=upgrade`: monotonic per-process session ID, forwarded-IP **presence only**, and a sanitized Cloudflare Ray identifier when present;
-- `event=close`: the same session ID, duration in milliseconds and one termination reason;
-- `event=capacity-reject`: current full-capacity count and configured ceiling;
-- `event=error`: session ID plus failure stage and exception type.
+| Event | Purpose |
+|---|---|
+| `event=listen` | listener/backend, connection ceiling, PROXY mode |
+| `event=upgrade` | session ID, forwarded-IP presence, sanitized CF-Ray correlation |
+| `event=close` | session ID, duration, termination reason |
+| `event=capacity-reject` | full-capacity count and configured ceiling |
+| `event=error` | session ID, failure stage, exception type |
 
-The gateway intentionally does not write the raw forwarded player address to these operational events. Invalid or control-character-bearing CF-Ray values are reduced to `invalid` rather than copied into logs.
+Raw forwarded player addresses are intentionally omitted from these operational events. Invalid/control-character-bearing CF-Ray values are reduced rather than copied verbatim.
 
 ## Operational validation
 
-A healthy deployment must pass:
+A healthy deployment should pass, in order:
 
-1. HTTPS DNS/TLS resolution.
-2. `GET /mcflare` with WebSocket Upgrade and `mcflare.v1` returns HTTP 101.
-3. A real Minecraft Status request over that same WebSocket returns a parseable Status response.
-4. Gateway sees Cloudflare IP and Ray metadata.
-5. If PROXY mode is enabled, backend server accepts the connection and observes/restores the forwarded address.
-6. Full player login and sustained gameplay pass before production cutover.
+1. hostname DNS and HTTPS/TLS resolution;
+2. WebSocket Upgrade on exact `/mcflare`;
+3. exact subprotocol selection `mcflare.v1`;
+4. Minecraft Status through the WebSocket;
+5. backend connection and PROXY parsing, if enabled;
+6. full player LOGIN → CONFIGURATION → GAME;
+7. one ordinary non-MCflare server regression from the same client;
+8. sustained connection/reconnect behavior before production cutover.
+
+If the sequence breaks, use [Troubleshooting](TROUBLESHOOTING.md).
 
 ## References
 
-- Cloudflare Tunnel routing: https://developers.cloudflare.com/tunnel/routing/
-- Local ingress configuration: https://developers.cloudflare.com/tunnel/advanced/local-management/configuration-file/
-- Published application protocols: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/protocols/
-- Cloudflare WebSockets: https://developers.cloudflare.com/network/websockets/
-- Traefik WebSocket guide: https://doc.traefik.io/traefik/user-guides/websocket/
-- Caddy `reverse_proxy`: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy
-- NGINX WebSocket proxying: https://nginx.org/en/docs/http/websocket.html
+- [Cloudflare WebSockets](https://developers.cloudflare.com/network/websockets/)
+- [Cloudflare Tunnel routing](https://developers.cloudflare.com/tunnel/routing/)
+- [Cloudflare Tunnel configuration file](https://developers.cloudflare.com/tunnel/advanced/local-management/configuration-file/)
+- [Cloudflare published application protocols](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/protocols/)
+- [Traefik WebSocket guide](https://doc.traefik.io/traefik/user-guides/websocket/)
+- [Caddy `reverse_proxy`](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+- [NGINX WebSocket proxying](https://nginx.org/en/docs/http/websocket.html)
+
+## Related docs
+
+- [Choose your setup](SETUP_CHOICES.md)
+- [Installation](INSTALLATION.md)
+- [Real player IP](REAL_IP.md)
+- [Troubleshooting](TROUBLESHOOTING.md)

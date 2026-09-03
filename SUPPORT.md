@@ -4,9 +4,11 @@ MCflare support is handled through GitHub Issues.
 
 Before opening an issue, check:
 
-1. [Installation](docs/INSTALLATION.md)
-2. [Compatibility](docs/COMPATIBILITY.md)
-3. [Troubleshooting](docs/TROUBLESHOOTING.md)
+1. [FAQ](docs/FAQ.md)
+2. [Installation](docs/INSTALLATION.md)
+3. [Choose your setup](docs/SETUP_CHOICES.md)
+4. [Compatibility](docs/COMPATIBILITY.md)
+5. [Troubleshooting](docs/TROUBLESHOOTING.md)
 
 A useful support report includes Minecraft version, loader/platform version, MCflare artifact/version, whether the route is Orange/Tunnel/ordinary-direct, and the smallest relevant log excerpt.
 

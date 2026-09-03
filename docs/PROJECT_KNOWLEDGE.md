@@ -1,4 +1,4 @@
-> **CURRENT ARCHITECTURE NOTICE (2026-09-01):** Sections below preserve historical experiments and are not the current implementation where they describe Tunnel-basic, MCF1, voice/datagram services, `/.well-known/mcflare`, Fabric-only support, or Netty HAProxy decoding. The current standards-first architecture is defined by `V1_ARCHITECTURE.md`, `V1_PROTOCOL.md`, `REAL_IP.md`, `BUILD_MATRIX.md`, `DEPLOYMENT.md`, and `TEST_EVIDENCE_2026-09-01.md`. Current adapter source is shared by Fabric and NeoForge 1.21.11/26.1/26.2, and current wire transport is `/mcflare` + `mcflare.v1`.
+> **HISTORICAL RESEARCH ARCHIVE:** This long-form file preserves experiments, rejected designs, and the reasoning that led to MCflare v1. It is intentionally not an onboarding guide and should not be read as current behavior where it mentions Tunnel-basic, MCF1, voice/datagram services, `/.well-known/mcflare`, Fabric-only support, or Netty HAProxy decoding. Current authority is [V1_PROTOCOL.md](V1_PROTOCOL.md) for wire behavior, [V1_ARCHITECTURE.md](V1_ARCHITECTURE.md) for components, and the current Installation/Deployment/Compatibility guides for operation.
 
 # MCflare project knowledge
 

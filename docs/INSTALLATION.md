@@ -1,36 +1,76 @@
 # Installation
 
-MCflare is designed so the player experience remains normal Minecraft. Players install a mod once; server administrators install the matching server integration and expose `/mcflare` through Cloudflare.
+MCflare is designed to disappear into the normal Minecraft workflow: players install a mod once and keep using **Join Server**; administrators install the server integration and publish one WebSocket path.
 
-## 1. Choose the artifact
+![MCflare player and administrator experience](assets/ux.webp)
 
-| Environment | Artifact |
-|---|---|
-| Fabric / Quilt 1.21.11 | `mcflare-fabric-1.21.11-<version>.jar` |
-| Fabric / Quilt 26.1–26.2 | `mcflare-fabric-26.1-26.2-<version>.jar` |
-| NeoForge 1.21.11 | `mcflare-neoforge-1.21.11-<version>.jar` |
-| NeoForge 26.1–26.2 | `mcflare-neoforge-26.1-26.2-<version>.jar` |
-| Paper / Purpur server | `mcflare-paper-<version>.jar` |
+> The diagram is a conceptual overview. The configuration examples below are the authoritative setup instructions.
 
-Fabric artifacts are also runtime-tested on Quilt. Paper/Purpur is server-only; players still use Fabric/Quilt or NeoForge.
+## Before you begin
 
-## 2. Player installation
+You need:
 
-Place the correct Fabric/Quilt or NeoForge JAR in the normal `mods/` directory and launch Minecraft.
+- a supported Minecraft/loader/server version;
+- the matching MCflare JAR;
+- a hostname you control, such as `play.example.com`;
+- a Cloudflare-proxied zone;
+- either an HTTPS reverse proxy **or** a named Cloudflare Tunnel for `/mcflare`.
 
-There is no player-side configuration for Cloudflare, Tunnel tokens, proxy addresses, or WSS URLs. Add the Minecraft server using its normal hostname, for example:
+If you have not chosen an ingress style yet, read [Choose Your MCflare Setup](SETUP_CHOICES.md).
+
+## Choose the artifact
+
+| Environment | Install on | Artifact |
+|---|---|---|
+| Fabric / Quilt 1.21.11 | player + server | `mcflare-fabric-1.21.11-<version>.jar` |
+| Fabric / Quilt 26.1–26.2 | player + server | `mcflare-fabric-26.1-26.2-<version>.jar` |
+| NeoForge 1.21.11 | player + server | `mcflare-neoforge-1.21.11-<version>.jar` |
+| NeoForge 26.1–26.2 | player + server | `mcflare-neoforge-26.1-26.2-<version>.jar` |
+| Paper / Purpur | server only | `mcflare-paper-<version>.jar` |
+
+Quilt uses the matching Fabric artifact. Paper/Purpur players still need a supported Fabric/Quilt or NeoForge client mod.
+
+See [Compatibility](COMPATIBILITY.md) for the exact tested families and Java requirements.
+
+## Player installation
+
+### 1. Install the mod
+
+Place the matching Fabric/Quilt or NeoForge JAR in the normal Minecraft `mods/` directory and launch Minecraft.
+
+There is no player-side Cloudflare configuration.
+
+### 2. Add the server normally
+
+Use the ordinary Minecraft hostname:
 
 ```text
 play.example.com
 ```
 
-MCflare automatically leaves ordinary non-MCflare servers on normal TCP.
+Do **not** enter a WebSocket URL, Cloudflare hostname, proxy port, or Tunnel token.
 
-## 3. Fabric / Quilt / NeoForge server
+### 3. Join
 
-Place the same loader/version JAR in the dedicated server's `mods/` directory.
+Click **Join Server** exactly as you would for an ordinary server.
 
-On first server start MCflare creates `config/mcflare.properties`. The important values are:
+For an MCflare host, the mod opens the protected WebSocket internally. For an ordinary non-MCflare host, Minecraft keeps using its normal direct TCP path.
+
+## Fabric / Quilt / NeoForge server installation
+
+### 1. Install the same loader-family JAR
+
+Place the matching MCflare JAR in the dedicated server's `mods/` directory.
+
+### 2. Start the server once
+
+MCflare creates:
+
+```text
+config/mcflare.properties
+```
+
+The main settings are:
 
 ```properties
 enabled=true
@@ -38,15 +78,29 @@ listen=127.0.0.1:25577
 max-connections=256
 ```
 
-Keep the gateway on loopback or a private interface whenever possible. Do not expose the gateway listener directly to arbitrary Internet traffic merely to make Cloudflare routing easier.
+Keep the MCflare listener on loopback or a private interface whenever possible.
 
-MCflare starts the WebSocket gateway and forwards accepted Minecraft streams to the actual Minecraft listener. The integrated server path enables PROXY-v1 handoff so Minecraft can see the restored visitor address.
+### 3. Understand the backend
 
-## 4. Paper / Purpur server
+The integrated Fabric/Quilt/NeoForge server adapter takes the Minecraft backend address/port from the running dedicated server. You do not need to duplicate the Minecraft port in MCflare configuration.
 
-Place `mcflare-paper-<version>.jar` in `plugins/` and start the server once.
+When real-IP forwarding is active, the local server adapter can consume the gateway's PROXY-v1 prefix and restore the visitor address before normal Minecraft decoding.
 
-The generated/default plugin configuration includes:
+## Paper / Purpur server installation
+
+### 1. Install the plugin
+
+Place:
+
+```text
+mcflare-paper-<version>.jar
+```
+
+in the server's `plugins/` directory and start the server once.
+
+### 2. Review the MCflare plugin config
+
+The generated/default configuration includes:
 
 ```yaml
 enabled: true
@@ -57,38 +111,81 @@ max-connections: 256
 proxy-protocol: true
 ```
 
-When `proxy-protocol: true`, enable Paper's native HAProxy/PROXY support as described in [REAL_IP.md](REAL_IP.md). Purpur follows the same Paper-compatible path.
+### 3. Enable native PROXY support when required
 
-## 5. Route `/mcflare` through Cloudflare
+When `proxy-protocol: true`, Paper/Purpur must also be configured to consume HAProxy PROXY protocol on the backend connection. See [Real Player IP](REAL_IP.md#paper--purpur--proxy-stacks).
 
-Choose exactly one ingress style for a hostname:
+Treat a PROXY-enabled Minecraft backend as private/trusted infrastructure; raw players connecting directly to that port will not speak the expected prefix.
 
-- **Orange proxy:** Cloudflare proxied DNS → HTTPS reverse proxy → MCflare gateway.
-- **Named Tunnel:** Cloudflare → `cloudflared` → MCflare gateway.
+## Route `/mcflare` through Cloudflare
 
-The client does not know which one you selected. Both expose the same endpoint:
+Choose one ingress style for each public Minecraft hostname:
+
+### Orange proxy
+
+```text
+player → Cloudflare → HTTPS reverse proxy → /mcflare → MCflare gateway
+```
+
+### Named Tunnel
+
+```text
+player → Cloudflare → named Tunnel → cloudflared → /mcflare → MCflare gateway
+```
+
+Both expose exactly:
 
 ```text
 wss://play.example.com/mcflare
 Sec-WebSocket-Protocol: mcflare.v1
 ```
 
-Copy a tested configuration from [DEPLOYMENT.md](DEPLOYMENT.md).
+Copy a tested Traefik, Caddy, NGINX, or Tunnel configuration from [Deployment](DEPLOYMENT.md).
 
-## 6. Verify the installation
+## Verify the installation
 
-A healthy setup has these properties:
+A healthy setup should satisfy all of the following.
 
-1. `https://play.example.com/mcflare` reaches the gateway only when used as a WebSocket upgrade.
-2. The upgrade selects the exact, case-sensitive `mcflare.v1` subprotocol.
-3. A player with MCflare reaches Minecraft LOGIN → CONFIGURATION → GAME.
-4. The same player can still join an ordinary non-MCflare server through direct TCP.
-5. If real-IP forwarding is enabled, Minecraft sees the visitor address rather than a loopback/Cloudflare edge address.
+### Player path
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if one of these fails.
+- Minecraft can resolve the normal hostname.
+- A protected host reaches LOGIN → CONFIGURATION → GAME.
+- An ordinary non-MCflare server still connects normally.
 
-## Upgrades
+### WebSocket path
 
-Replace the JAR with the newer artifact for the same loader/version family and restart Minecraft/the server normally. Do not mix Fabric and NeoForge artifacts.
+- `/mcflare` reaches the gateway only through the intended ingress.
+- the HTTP Upgrade returns `101 Switching Protocols`;
+- the selected subprotocol is exactly `mcflare.v1`;
+- there is no browser login/challenge page in front of the game path.
 
-A hostname successfully proven as MCflare is remembered on the player machine to prevent silent downgrade to an accidentally exposed direct origin. See the troubleshooting guide before intentionally converting such a hostname back to a non-MCflare server.
+### Server path
+
+- the gateway can reach the Minecraft backend;
+- gateway and server agree on whether PROXY v1 is enabled;
+- if real-IP forwarding is enabled, Minecraft sees the visitor address rather than the local gateway/Cloudflare edge address.
+
+If a step fails, follow the decision tree in [Troubleshooting](TROUBLESHOOTING.md).
+
+## Upgrading MCflare
+
+1. Stop the affected Minecraft client/server normally.
+2. Replace the JAR with the newer artifact for the same loader/version family.
+3. Start Minecraft/server again.
+4. Re-run a normal join and, for servers, one real-IP check if you use PROXY v1.
+
+Do not mix Fabric and NeoForge artifacts.
+
+## Intentionally removing MCflare from a hostname
+
+A hostname that has positively proven MCflare is remembered on player machines to prevent silent downgrade. If an administrator intentionally converts that hostname back to ordinary raw Minecraft, affected players may need to remove that specific positive pin.
+
+Read [Troubleshooting: A hostname was intentionally converted back to ordinary Minecraft](TROUBLESHOOTING.md#a-hostname-was-intentionally-converted-back-to-ordinary-minecraft) before doing so.
+
+## Next steps
+
+- [Choose your setup](SETUP_CHOICES.md)
+- [Deployment](DEPLOYMENT.md)
+- [Real player IP](REAL_IP.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+- [FAQ](FAQ.md)

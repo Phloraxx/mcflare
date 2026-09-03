@@ -1,92 +1,225 @@
-# MCflare Compatibility and Packaging
+# Compatibility and Packaging
 
-## Packaging principle
+MCflare's wire transport is loader-independent, but Minecraft integration hooks and loader packaging are version-sensitive. Support is therefore expressed as a small set of tested artifact families.
 
-Client/server is not the reason MCflare needs multiple artifacts. Loader APIs and Minecraft-version hooks are.
+## Supported artifact families
 
-For a specific compatible Fabric version family, the same Fabric JAR should be installable on the player and Fabric dedicated server. Fabric `fabric.mod.json` supports `environment: "*"`; client-only mixins remain physically scoped to the client and server mixins remain server scoped.
+| Artifact family | Player | Dedicated server | Java |
+|---|---:|---:|---:|
+| Fabric / Quilt 1.21.11 | Yes | Yes | 21 |
+| Fabric / Quilt 26.1–26.2 | Yes | Yes | 25 |
+| NeoForge 1.21.11 | Yes | Yes | 21 |
+| NeoForge 26.1–26.2 | Yes | Yes | 25 |
+| Paper / Purpur plugin | No | Yes | 21 |
 
-Current/proposed release model:
+Release filenames are versioned, for example:
 
 ```text
-mcflare-fabric-1.21.11.jar     -> client + Fabric server
-mcflare-fabric-26.1-26.2.jar   -> client + Fabric server on either 26.1 or 26.2
-mcflare-neoforge-1.21.11.jar   -> client + NeoForge 1.21.11 server
-mcflare-neoforge-26.1-26.2.jar -> client + NeoForge server on either 26.1 or 26.2
-mcflare-paper.jar              -> Paper/Purpur server only; one Java-21 binary proven on 1.21.11, 26.1.2 and 26.2
+mcflare-fabric-1.21.11-<release>.jar
+mcflare-fabric-26.1-26.2-<release>.jar
+mcflare-neoforge-1.21.11-<release>.jar
+mcflare-neoforge-26.1-26.2-<release>.jar
+mcflare-paper-<release>.jar
 ```
 
-Do not create separate `client.jar` and `server.jar` for the same Fabric/NeoForge target unless a real packaging problem requires it.
+Quilt uses the Fabric artifacts. Paper/Purpur players still need a supported Fabric/Quilt or NeoForge client mod.
+
+## Why player and server do not need separate Fabric/NeoForge JARs
+
+Client/server is not the reason MCflare has multiple binaries. Loader APIs and Minecraft-version hooks are.
+
+For a supported Fabric or NeoForge family, the same JAR can be installed on:
+
+```text
+player mods/   ↔   dedicated server mods/
+```
+
+Physical-side hooks are isolated internally so client-only code does not run as dedicated-server behavior and vice versa.
+
+Do not create separate `client.jar` / `server.jar` variants unless a real packaging boundary requires it.
+
+## Why there are still multiple version families
+
+MCflare does not decode Minecraft gameplay packets, which makes the transport broadly version-neutral.
+
+Minecraft connection **hooks** are different. Mojang can change:
+
+- connection creation methods;
+- server-list Status paths;
+- listener/channel initialization;
+- mappings/signatures;
+- minimum Java runtime.
+
+A JAR is therefore claimed compatible only after the integration itself is built and exercised on that family.
 
 ## Shared core versus adapters
 
-The transport core is version/loader independent and Java-8-compatible. Version-specific code should only:
+### Shared core/gateway
+
+Loader-independent code owns:
+
+- RFC 6455 transport;
+- route selection and positive pins;
+- loopback carrier;
+- gateway WebSocket lifecycle;
+- PROXY-v1 codec;
+- operational logging/capacity behavior.
+
+`core/` and `gateway/` target Java 8 for broad standalone deployability.
+
+### Minecraft adapters
+
+Version/loader-specific code should only do what Minecraft integration requires:
 
 - preserve the logical hostname the player typed;
 - intercept join/status socket creation;
 - attach carrier lifecycle to Minecraft connection lifecycle;
-- on dedicated server, start/stop the local gateway;
-- on platforms that need it, restore PROXY-protocol source address.
+- start/stop the gateway on dedicated servers;
+- restore PROXY metadata on platforms that need MCflare's parser.
 
 Minecraft packet interpretation does not belong in adapters.
 
-## Minecraft version compatibility
+## Fabric
 
-Protocol compatibility is broad because MCflare carries bytes without decoding Minecraft packets. Hook compatibility is narrow because Mojang can change connection methods and anonymous channel initializers between versions.
+Fabric is the reference loader integration.
 
-Claim support only after a real build plus ordinary-direct and protected Status/login regression on that exact loader/version family.
+Proven families:
 
-Current proven shared source adapter: Fabric **and NeoForge** 1.21.11, 26.1 and 26.2. The same root Java source compiles/applies across all six loader/version combinations. Each loader's real 1.21.11 production artifact passed standalone server tests, and each loader has one 26.1-baseline JAR proven unchanged on standalone 26.1 and 26.2 servers. See `BUILD_MATRIX.md`.
+- dedicated 1.21.11 artifact;
+- one combined 26.1–26.2 artifact tested unchanged on both versions.
 
-## Other mods
+The same family artifact serves client and dedicated server.
 
-Most mods need no MCflare integration if they communicate using Minecraft's existing connection. Fabric/Forge/NeoForge custom payloads, plugin messages, login extensions, inventory/entity/chunk traffic, compression, and Minecraft encryption remain ordinary stream bytes.
+## Quilt
 
-Likely conflict class: mods that replace the same connection resolver, connect screen, `Connection.connect*`, status pinger, or server listener pipeline. These require explicit compatibility tests.
+Quilt does not add another MCflare binary family.
 
-Client rendering/UI/performance mods are normally unrelated.
+The exact matching Fabric artifacts have been runtime-tested on Quilt for the documented families, including protected WSS/PROXY Status behavior.
 
-Separate-socket services are outside scope. Voice chat, Dynmap HTTP, mod-specific UDP, separate telemetry sockets, and similar services continue to use their own network paths.
+Use:
 
-## Fabric / Quilt
-
-Fabric is the reference adapter. Quilt requires no MCflare-specific module or artifact: the exact Fabric 1.21.11 JAR passed direct plus TCP4/TCP6 WSS->PROXY Status on Quilt 1.21.11, and the exact combined Fabric 26.1-26.2 JAR passed the same tests unchanged on Quilt 26.1 and 26.2. Ship the Fabric artifacts for Quilt as well.
+```text
+Fabric MCflare JAR → Quilt client/server
+```
 
 ## NeoForge
 
-NeoForge is now implemented as a thin packaging module over the same Minecraft adapter source used by Fabric. Shared root source contains no NeoForge imports; the only NeoForge-specific Java is a tiny `@Mod("mcflare")` marker. NeoForge 1.21.11, 26.1 and 26.2 have passed direct Status plus integrated WSS -> PROXY -> Status tests. One exact 26.1-baseline NeoForge JAR is runtime-proven on both 26.1 and 26.2.
+NeoForge is a thin packaging/integration layer over the same shared Minecraft adapter source used by Fabric where possible.
 
-## Paper / Purpur
+Proven families:
 
-Paper/Purpur is server-only from MCflare's perspective. Players still need a client-side Fabric/Quilt/NeoForge-compatible MCflare artifact. One Java-21 `mcflare-paper` JAR is runtime-proven unchanged on Paper and Purpur 1.21.11, 26.1.2 and 26.2. It only owns gateway lifecycle; real-IP restoration uses the platform's native `proxies.proxy-protocol: true` setting.
+- dedicated 1.21.11 artifact;
+- one combined 26.1–26.2 artifact tested unchanged on both versions.
 
-## Velocity and Minecraft proxies
+The same family artifact serves client and dedicated server.
 
-If MCflare fronts a Minecraft proxy, that proxy becomes the configured Minecraft backend. Prefer the proxy's native HAProxy/PROXY support where available. Do not reinterpret Velocity/Bungee forwarding as MCflare wire protocol.
+## Paper and Purpur
+
+Paper/Purpur support is server-only from MCflare's perspective.
+
+One Java-21 plugin JAR owns gateway lifecycle across the tested Paper/Purpur family. Real-IP restoration uses the platform's native:
+
+```yaml
+proxies:
+  proxy-protocol: true
+```
+
+rather than a second MCflare-specific network decoder.
+
+Players connecting to Paper/Purpur still need a supported Fabric/Quilt or NeoForge MCflare client mod.
+
+## Other Minecraft mods
+
+Most mods need no special MCflare integration if they communicate through Minecraft's existing connection.
+
+Examples normally carried transparently:
+
+- custom payloads;
+- plugin messages;
+- login extensions;
+- compression/encryption;
+- chunks/entities;
+- inventory/gameplay traffic.
+
+### Likely conflict class
+
+Explicit testing is appropriate for mods that replace or heavily modify the same areas MCflare hooks, such as:
+
+- connection resolver;
+- Join Server/connect screen;
+- `Connection.connect*` behavior;
+- server-list Status pinger;
+- server listener/channel initializer.
+
+Client rendering, UI, shader, and performance mods are usually unrelated to the network hook.
+
+## Separate-socket services
+
+MCflare carries only Minecraft's own Java connection.
+
+Separate services remain separate:
+
+- voice-chat UDP/TCP media sockets;
+- Dynmap/web-map HTTP;
+- telemetry sockets;
+- unrelated game/service ports.
+
+A mod may use Minecraft plugin/custom payload messages for control while still opening a separate voice/media socket; only the Minecraft-stream portion travels through MCflare.
+
+## Minecraft proxies
+
+If MCflare fronts a Minecraft proxy, that proxy becomes the configured backend.
+
+Prefer its native HAProxy/PROXY support when available. Do not reinterpret Velocity/Bungee forwarding protocols as part of `mcflare.v1`.
+
+MCflare's WebSocket transport ends at the gateway; backend-specific forwarding begins after that boundary.
 
 ## Java runtimes
 
-`core/` and `gateway/` target Java 8 for broad deployability. Fabric and NeoForge 1.21.11 artifacts target Java 21; both combined 26.1-26.2 loader artifacts target Java 25.
+| Component | Target/runtime |
+|---|---|
+| `core/` | Java 8 bytecode |
+| `gateway/` | Java 8 bytecode |
+| Fabric/Quilt 1.21.11 | Java 21 |
+| NeoForge 1.21.11 | Java 21 |
+| Fabric/Quilt 26.1–26.2 | Java 25 |
+| NeoForge 26.1–26.2 | Java 25 |
+| Paper/Purpur plugin | Java 21 |
 
-## Test coverage guidance
+Use the Java runtime required by the Minecraft/server family rather than assuming the core's Java-8 target makes modern Minecraft itself runnable on Java 8.
 
-Core release coverage:
+## What “supported” means here
+
+A release family should have, at minimum:
 
 - clean build;
-- server list Status through MCflare;
-- full login/configuration/game-state transport (offline-mode is sufficient for the MCflare transport gate);
-- ordinary server with MCflare installed;
-- server shutdown/restart lifecycle;
-- failed local gateway bind does not crash Minecraft;
-- IPv4 and IPv6 WSS where available;
-- real-IP restoration when server adapter supports it.
+- server-list Status through MCflare;
+- full LOGIN → CONFIGURATION → GAME transport proof;
+- ordinary non-MCflare server regression;
+- server lifecycle/bind-failure behavior;
+- IPv4/IPv6 WSS and real-IP tests where applicable;
+- release packaging/metadata verification.
 
-Recommended optional expansion:
+The repository's exact CI properties and matrix rationale are in [BUILD_MATRIX.md](BUILD_MATRIX.md).
+
+Detailed runtime evidence is in [TEST_MATRIX.md](TEST_MATRIX.md) and [TEST_EVIDENCE_2026-09-01.md](TEST_EVIDENCE_2026-09-01.md).
+
+## Optional compatibility expansion
+
+Useful future checks, but not current hobby-release blockers:
 
 - authenticated `online-mode=true` login;
-- common connection-altering mods/proxies relevant to that ecosystem;
-- additional graphical-client and world-generation stress.
+- popular connection-altering mods/proxies relevant to each ecosystem;
+- additional graphical-client/world-generation stress;
+- newer Minecraft families after their hooks/toolchains stabilize.
+
+## Related docs
+
+- [Installation](INSTALLATION.md)
+- [Choose your setup](SETUP_CHOICES.md)
+- [Build matrix](BUILD_MATRIX.md)
+- [v1 architecture](V1_ARCHITECTURE.md)
 
 ## Reference
 
-Fabric metadata and physical-side behavior: https://docs.fabricmc.net/develop/loader/fabric-mod-json
+- [Fabric `fabric.mod.json` documentation](https://docs.fabricmc.net/develop/loader/fabric-mod-json)

@@ -1,5 +1,7 @@
 # MCflare v1 Implementation and Release Plan
 
+> **HISTORICAL / COMPLETED PLAN:** This file preserves the gate-by-gate engineering path used to reach the current v1 architecture. It is not the setup guide or current roadmap. For current behavior use [V1_ARCHITECTURE.md](V1_ARCHITECTURE.md), [V1_PROTOCOL.md](V1_PROTOCOL.md), [INSTALLATION.md](INSTALLATION.md), and [DEPLOYMENT.md](DEPLOYMENT.md). Remaining items described below may be historical unless they are also listed in current release documentation.
+
 Status date: 2026-09-01.
 
 ## Architecture freeze
