@@ -78,7 +78,7 @@ The restored **IP address** is the meaningful identity. MCflare does not claim t
 
 The shared dedicated-server adapter integrates with Minecraft's existing connection listener.
 
-For trusted local/loopback gateway connections, it installs a small detector before normal Minecraft decoding:
+For trusted gateway connections, it installs a small detector before normal Minecraft decoding. Loopback is always trusted; if Minecraft is explicitly bound with `server-ip`, MCflare also trusts only that exact address after verifying it belongs to a local network interface:
 
 1. buffer only enough data to decide whether the stream starts with `PROXY `;
 2. enforce the PROXY-v1 108-byte text-line maximum;
@@ -88,7 +88,7 @@ For trusted local/loopback gateway connections, it installs a small detector bef
 
 If there is no PROXY prefix, ordinary Minecraft bytes continue untouched.
 
-Remote direct clients do not receive this trusted-local treatment by default. MCflare also avoids adding Netty's separate HAProxy codec module; the parser uses the Netty/core types already available in the server environment.
+Remote direct clients do not receive this trusted-local treatment. A non-loopback exception exists only for the exact verified local address used by the integrated gateway when Minecraft itself is explicitly bound there. MCflare also avoids adding Netty's separate HAProxy codec module; the parser uses the Netty/core types already available in the server environment.
 
 ## Paper / Purpur / proxy stacks
 
@@ -143,13 +143,13 @@ Protect the origin separately. A proxied DNS record does not itself make a reach
 
 ### Minecraft-side parser
 
-Fabric/Quilt/NeoForge trust PROXY metadata only from the intended local gateway boundary by default.
+Fabric/Quilt/NeoForge trust PROXY metadata from loopback by default. When `server-ip` binds Minecraft to a specific local interface, the integrated gateway temporarily adds only that exact verified local address to the trusted source set.
 
 Paper/Purpur native PROXY configuration effectively turns that Minecraft listener into a trusted proxy backend, so it should be private/firewalled against raw player connections.
 
 ### Multi-tenant hosts
 
-If untrusted tenants share a host/network namespace, review loopback trust before using the default local-only model. “Loopback” is not an authorization boundary between mutually untrusted processes sharing the same namespace.
+If untrusted tenants share a host/network namespace, review local-process trust before using this model. Loopback—and an explicitly trusted local interface address—is not an authorization boundary between mutually untrusted processes sharing the same host/network namespace.
 
 ## What the gateway logs
 
