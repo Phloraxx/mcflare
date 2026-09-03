@@ -47,10 +47,15 @@ final class WebSocketServerConnection implements Closeable {
 
     static WebSocketServerConnection accept(Socket socket, String requiredPath, String requiredSubprotocol)
             throws IOException {
+        return accept(socket, requiredPath, requiredSubprotocol, HANDSHAKE_TIMEOUT_MS);
+    }
+
+    static WebSocketServerConnection accept(Socket socket, String requiredPath, String requiredSubprotocol,
+                                             int handshakeTimeoutMs) throws IOException {
+        if (handshakeTimeoutMs < 1) throw new IllegalArgumentException("handshakeTimeoutMs");
         socket.setTcpNoDelay(true);
         socket.setKeepAlive(true);
-        socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
-        UpgradeRequest request = readUpgrade(socket.getInputStream());
+        UpgradeRequest request = readUpgrade(socket, handshakeTimeoutMs);
         if (!requiredPath.equals(request.path)) {
             writeHttpError(socket.getOutputStream(), 404, "Not found");
             throw new IOException("unexpected WebSocket path");
@@ -298,11 +303,13 @@ final class WebSocketServerConnection implements Closeable {
         return false;
     }
 
-    private static UpgradeRequest readUpgrade(InputStream input) throws IOException {
+    private static UpgradeRequest readUpgrade(Socket socket, int timeoutMs) throws IOException {
+        InputStream input = socket.getInputStream();
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         int matched = 0;
         while (bytes.size() < MAX_HEADERS) {
-            int b = input.read();
+            int b = readBeforeDeadline(socket, input, deadlineNanos);
             if (b < 0) throw new EOFException("HTTP EOF");
             bytes.write(b);
             char expected = "\r\n\r\n".charAt(matched);
@@ -332,6 +339,15 @@ final class WebSocketServerConnection implements Closeable {
         }
         return new UpgradeRequest(requestLine[1], headers);
     }
+    private static int readBeforeDeadline(Socket socket, InputStream input, long deadlineNanos)
+            throws IOException {
+        long remaining = deadlineNanos - System.nanoTime();
+        if (remaining <= 0L) throw new SocketTimeoutException("WebSocket handshake deadline exceeded");
+        long millis = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remaining));
+        socket.setSoTimeout((int) Math.min(Integer.MAX_VALUE, millis));
+        return input.read();
+    }
+
     private static void writeUpgrade(OutputStream output, String key, String subprotocol) throws IOException {
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");

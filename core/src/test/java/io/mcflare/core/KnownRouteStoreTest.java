@@ -28,6 +28,12 @@ class KnownRouteStoreTest {
     }
 
     @Test
+    void invalidNewPinIsRejectedInsteadOfSilentlySkippingPersistence() {
+        KnownRouteStore store = new KnownRouteStore(null);
+        assertThrows(IllegalArgumentException.class, () -> store.remember("not a host:25565"));
+    }
+
+    @Test
     void corruptPersistedDataFailsClosed() throws Exception {
         Path file = tempDir.resolve("known-hosts-v1.txt");
         Files.write(file, ("good.example.com:25565\n" +

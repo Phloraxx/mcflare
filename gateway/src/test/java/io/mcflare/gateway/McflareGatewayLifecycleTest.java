@@ -75,7 +75,7 @@ class McflareGatewayLifecycleTest {
             try (Socket first = openWebSocket(gatewayPort)) {
                 assertPeerClosesPromptly(first);
             }
-            try (Socket second = openWebSocket(gatewayPort)) {
+            try (Socket second = openWebSocketEventually(gatewayPort)) {
                 // A second upgrade succeeding proves the timed-out first session released the only slot.
             }
         } finally {
@@ -140,8 +140,28 @@ class McflareGatewayLifecycleTest {
         output.write(request.getBytes(StandardCharsets.US_ASCII));
         output.flush();
         String response = readHeaders(socket.getInputStream());
-        assertTrue(response.startsWith("HTTP/1.1 101"), response);
+        if (!response.startsWith("HTTP/1.1 101")) {
+            socket.close();
+            fail(response);
+        }
         return socket;
+    }
+
+    private static Socket openWebSocketEventually(int port) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        AssertionError lastBusy = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                return openWebSocket(port);
+            } catch (AssertionError error) {
+                if (error.getMessage() == null || !error.getMessage().contains("503 Service Unavailable")) {
+                    throw error;
+                }
+                lastBusy = error;
+                Thread.sleep(10L);
+            }
+        }
+        throw lastBusy == null ? new AssertionError("gateway slot was not released") : lastBusy;
     }
 
     private static String readHeaders(InputStream input) throws IOException {

@@ -160,6 +160,34 @@ class WebSocketServerConnectionTest {
         }
     }
 
+    @Test void handshakeUsesAbsoluteDeadlineDespiteSlowDripTraffic() throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<Throwable> result = new CompletableFuture<Throwable>();
+            Thread acceptor = new Thread(() -> {
+                try (Socket socket = server.accept()) {
+                    WebSocketServerConnection.accept(socket, "/mcflare", "mcflare.v1", 150);
+                    result.complete(null);
+                } catch (Throwable error) { result.complete(error); }
+            });
+            acceptor.setDaemon(true);
+            acceptor.start();
+            try (Socket client = new Socket("127.0.0.1", server.getLocalPort())) {
+                for (byte value : "GET /mcflare HTTP/1.1\r\n".getBytes(StandardCharsets.US_ASCII)) {
+                    try {
+                        client.getOutputStream().write(value);
+                        client.getOutputStream().flush();
+                    } catch (IOException closed) {
+                        break;
+                    }
+                    Thread.sleep(30L);
+                    if (result.isDone()) break;
+                }
+            }
+            Throwable error = result.get(300, TimeUnit.MILLISECONDS);
+            assertTrue(error instanceof java.net.SocketTimeoutException, String.valueOf(error));
+        }
+    }
+
     @Test void http10AndMissingHostAreRejected() throws Exception {
         String key = Base64.getEncoder().encodeToString("0123456789abcdef".getBytes(StandardCharsets.US_ASCII));
         String common = "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key
