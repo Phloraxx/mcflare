@@ -38,6 +38,17 @@ class RouteResolverTest {
     }
 
     @Test
+    void rejectsInvalidLogicalPortsBeforeDiscovery() throws Exception {
+        try (RouteResolver resolver = new RouteResolver()) {
+            InetSocketAddress address = new InetSocketAddress("127.0.0.1", 25565);
+            assertThrows(IllegalArgumentException.class,
+                    () -> resolver.prepare("play.example.com", 0, address, null));
+            assertThrows(IllegalArgumentException.class,
+                    () -> resolver.prepare("play.example.com", 65536, address, null));
+        }
+    }
+
+    @Test
     void probesDnsNamesButNotLocalOrIpLiterals() {
         assertTrue(RouteResolver.isProbeCandidate("play.example.com"));
         assertFalse(RouteResolver.isProbeCandidate("localhost"));
