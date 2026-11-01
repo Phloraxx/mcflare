@@ -83,7 +83,7 @@ jobs:
       - name: Verify Fabric metadata
         run: |
           test "$(unzip -p dist/*.jar fabric.mod.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')" = "$VERSION"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcflare-fabric-${{ matrix.artifact }}
           path: dist/*.jar
@@ -171,7 +171,7 @@ jobs:
       - name: Verify NeoForge metadata
         run: |
           unzip -p dist/*.jar META-INF/neoforge.mods.toml | grep -Fq "version=\"$VERSION\""
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcflare-neoforge-${{ matrix.artifact }}
           path: dist/*.jar
@@ -212,7 +212,7 @@ jobs:
       - name: Verify Paper metadata
         run: |
           unzip -p dist/*.jar plugin.yml | grep -Fq "version: '$VERSION'"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcflare-paper
           path: dist/*.jar
@@ -259,7 +259,7 @@ jobs:
         run: sha256sum *.jar | sort -k2 > SHA256SUMS.txt
       - name: Show release bundle
         run: ls -lh dist && cat dist/SHA256SUMS.txt
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcflare-release-bundle
           path: dist/*
